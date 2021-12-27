@@ -1,0 +1,7 @@
+build
+testfile.src
+**/out
+perf.data*
+**/bin
+callgrind.out.*
+*.mod

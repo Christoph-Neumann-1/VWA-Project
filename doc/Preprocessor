@@ -1,0 +1,84 @@
+The preprocessor runs before any other part of the compiler, it can modify every part of the input file and allows for meta programming.
+It will be run even when importing things.
+It might or might not be turing complete, I will just see what happens
+It will NOT be fast, it doesn't really have to be. If you notice slowdowns you are probably abusing it too much.
+It will have features like variables for storing state and macros. There will be built in functions providing it with things like version or line number. 
+It doesn't know about anything you don't define first since it should be deterministic and not dependant on the date.
+There won't be any hidden macros, all macro invocations are explicit and easily visible.
+The syntax will be easy to read, you can create complex things with it but the basic building blocks should be understandable by everyone
+It will work even in strings, If you don't want it to get invoked you need to escape the #
+
+Example of how I want it to look like:
+
+//This is a comment
+
+//The first argument is the name of the macro, everything after that until the newline is part of the body
+#define x abc def
+
+//Paste the contents here
+#x
+
+//If you need your macro to occupy multiple lines use macro instead
+//The parameters can be used in the body like any other macro. Variadic macros will be added later
+#macro y(a,b,c)
+#a##b##c# //The double # here is not a special operator. Macro invocations are enclosed in # this allows for chaining them and makes it easy to see that there is a macro here
+#end y //To allow for nested macros while keeping the code readable you need to specify what to close. It is up to you to ensure this make sense.
+
+//Multi line macros get pasted as one might expect:
+#macro A
+a
+b
+c
+#end A
+
+x#a#y
+//Get turned into
+xa
+b
+cy
+
+//You pass arguments by adding leaving spaces in your macro expansion
+#x x y z#//This passes x,y and z as arguments
+//There is a second reserved symbol $ for evaluating the arguments
+#x $a y z# passes the content of a as a argument
+//If the macros evaluated have arguments themselves you can pass them by enclosing them in ##
+#x $#x x y c# y z#
+//If you wish to pass arguments containing spaces or $ add a \ before them
+//If you intend to use the \ on its own escape it too \\
+//adding a \ before a # caused the preprocessor to ignore it. The $ has no meaning outside of macro invokations
+//Adding a \ before a newline causes the lines to be merged
+
+a\
+b
+
+//Is equivalent to 
+
+ab
+//Macros are case sensitive a!=A
+
+//Built in functions like original line number start with and end with a __
+
+#__LINE__#
+
+//They are otherwise identical
+
+//In addition to normal macros there is also counters, basically integer variables
+//They can be converted to text like other macros by adding a # before and after them
+//You can perform math with them.
+
+#set a 5//The lhs may either be an integer or the name or a macro invokations resulting in one. It may also be the name of another counter
+#sub a 1
+#add a 1
+#mul a 2
+#div a 2
+#mod a 4
+//The above macros work as you expect
+
+//If you want to remove a macro use 
+#undef x
+//It works for counters and macros alike
+
+//Modules don't export macros therefore there is import
+#import file
+This pastes the content of the file at that position and evaluates it
+

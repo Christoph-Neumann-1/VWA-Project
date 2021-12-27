@@ -1,0 +1,25 @@
+Goal:
+ Create a simple to use programming language which can be compiled into byte code or interpreted. The bytecode should be cross platform, meaning I need to think about endianess
+ It should have a FFI, initially this will be done using c++ shared libraries wrapping native functions, but I plan to create a more user friendly FFI later.
+ The language will have the following features:
+  User defined data structures
+  Functions
+  A preprocessor for meta programming
+  A FFI using c++
+  A simple standard library providing IO and Math
+  Cross platform bytecode
+  Hopefully it will be faster than python at least
+  Simple optimizations
+  Easy to understand execution/evaluation order
+  Tail recursion
+  Compile time code execution - Even from other modules
+  Heap allocation through the keywords new/delete
+  Order independant top level declarations - Meaning you can do struct A{b:B} B{x:i32}
+  Sized integer types
+  Order independant imports
+  Only export certain symbols - This is especially useful due to the lack of namespaces
+  No build system necessary, just give the compiler the list of source files. Or provide the flag telling the compiler to build all needed modules if they don't exist
+  A disassembler for debug purposes
+  Few dependencies, runtime dependencies should be limited to a linux kernel(for memory allocation)
+  Type inference
+  Easy to read syntax 
