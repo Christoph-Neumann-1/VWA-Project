@@ -10,8 +10,8 @@
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [
-                "testfile.src",
-                "--stdout"
+                "testfile",
+                // "--stdout"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

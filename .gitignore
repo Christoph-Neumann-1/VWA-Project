@@ -1,5 +1,5 @@
 build
-testfile.src
+testfile
 **/out
 perf.data*
 **/bin

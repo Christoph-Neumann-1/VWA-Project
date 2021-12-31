@@ -7,6 +7,8 @@ It doesn't know about anything you don't define first since it should be determi
 There won't be any hidden macros, all macro invocations are explicit and easily visible.
 The syntax will be easy to read, you can create complex things with it but the basic building blocks should be understandable by everyone
 It will work even in strings, If you don't want it to get invoked you need to escape the #
+I might add a better data structure down the line, but for now its all std::string
+
 
 Example of how I want it to look like:
 
