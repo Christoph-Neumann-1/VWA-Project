@@ -77,11 +77,13 @@ namespace vwa
             tailrec,
         };
         Type type;
-        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double> value;
-        uint64_t line;
+        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double> value = {};
+        uint64_t line = 0;
+        // The function below is for debug purposes only, it doesn't not convert to the original string.
+        std::string toString() const;
     };
 
-    inline std::unordered_map<std::string, Token::Type> reservedIdentifiers{
+    inline const std::unordered_map<std::string, Token::Type> reservedIdentifiers{
         {"if", Token::Type::if_},
         {"else", Token::Type::else_},
         {"while", Token::Type::while_},
@@ -102,5 +104,5 @@ namespace vwa
         {"fun", Token::Type::func_},
     };
 
-    std::optional<std::vector<Token>> tokenize(std::string input);
+    std::optional<std::vector<Token>> tokenize(const std::string &input);
 }

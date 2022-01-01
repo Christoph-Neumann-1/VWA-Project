@@ -40,10 +40,43 @@ namespace vwa
         if (firstNonDigit == begin + 1 && str[0] == '.')
             return std::nullopt;
         size_t len;
-        return ({ auto t = dotFound ? ({bool isDouble = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'f';Token t{isDouble ? Token::Type::double_literal : Token::Type::float_literal, isDouble ? std::stod(str.data()+begin, &len) : std::stof(str.data()+begin, &len)}; begin-=!isDouble;t; })
-                                        : ({bool isLong = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'l';Token t{isLong ? Token::Type::long_literal : Token::Type::int_literal, isLong ? std::stol(str.data()+begin, &len) : std::stoi(str.data()+begin, &len)}; begin-=!isLong;t; });
-            begin += len;
-            t; });
+
+        switch (dotFound)
+        {
+        case true:
+        {
+            bool isDouble = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'd';
+            Token t{isDouble ? Token::Type::double_literal : Token::Type::float_literal};
+
+            switch (isDouble)
+            {
+            case true:
+                t.value = std::stod(str.data() + begin, &len);
+                break;
+            case false:
+                t.value = std::stof(str.data() + begin, &len);
+                break;
+            }
+            begin += len - !isDouble;
+            return t;
+        }
+        case false:
+        {
+            bool isLong = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'l';
+            Token t{isLong ? Token::Type::long_literal : Token::Type::int_literal};
+            switch (isLong)
+            {
+            case true:
+                t.value = std::stol(str.data() + begin, &len);
+                break;
+            case false:
+                t.value = std::stoi(str.data() + begin, &len);
+                break;
+            }
+            begin += len - !isLong;
+            return t;
+        }
+        }
     }
 
     std::optional<char> handleEscapedChar(char c)
@@ -67,7 +100,7 @@ namespace vwa
         }
     }
 
-    std::optional<std::vector<Token>> tokenize(std::string input)
+    std::optional<std::vector<Token>> tokenize(const std::string &input)
     {
         size_t current = 0;
         uint64_t lineCounter = 1;
@@ -122,6 +155,7 @@ namespace vwa
                     tokens.push_back({Token::Type::dot, {}});
                     break;
                 }
+                [[fallthrough]];
             case '0':
             case '1':
             case '2':
@@ -147,6 +181,7 @@ namespace vwa
                 {
                 case '>':
                     tokens.push_back({Token::Type::arrow_, {}});
+                    ++current;
                     break;
                 default:
                     tokens.push_back({Token::Type::minus, {}});
@@ -335,4 +370,90 @@ namespace vwa
             ++current;
         }
     }
+
+    std::string Token::toString() const
+    {
+        switch (type)
+        {
+        case Token::Type::id:
+            return "id(" + std::get<std::string>(value) + ")";
+        case Token::Type::int_literal:
+            return "int(" + std::to_string(std::get<int32_t>(value)) + ")";
+        case Token::Type::long_literal:
+            return "long(" + std::to_string(std::get<int64_t>(value)) + ")";
+        case Token::Type::float_literal:
+            return "float(" + std::to_string(std::get<float>(value)) + ")";
+        case Token::Type::double_literal:
+            return "double(" + std::to_string(std::get<double>(value)) + ")";
+        case Token::Type::string_literal:
+            return "string(" + std::get<std::string>(value) + ")";
+        case Token::Type::char_literal:
+            return "char(" + std::string(1, std::get<char>(value)) + ")";
+        case Token::Type::lparen:
+            return "lparen";
+        case Token::Type::rparen:
+            return "rparen";
+        case Token::Type::lbracket:
+            return "lbracket";
+        case Token::Type::rbracket:
+            return "rbracket";
+        case Token::Type::lbrace:
+            return "lbrace";
+        case Token::Type::rbrace:
+            return "rbrace";
+        case Token::Type::comma:
+            return "comma";
+        case Token::Type::semicolon:
+            return "semicolon";
+        case Token::Type::colon:
+            return "colon";
+        case Token::Type::dot:
+            return "dot";
+        case Token::Type::arrow_:
+            return "arrow";
+        case Token::Type::eq:
+            return "eq";
+        case Token::Type::assign:
+            return "assign";
+        case Token::Type::plus:
+            return "plus";
+        case Token::Type::minus:
+            return "minus";
+        case Token::Type::asterix:
+            return "asterix";
+        case Token::Type::double_asterix:
+            return "double_asterix";
+        case Token::Type::slash:
+            return "slash";
+        case Token::Type::modulo:
+            return "modulo";
+        case Token::Type::ampersand:
+            return "ampersand";
+        case Token::Type::double_ampersand:
+            return "double_ampersand";
+        case Token::Type::double_pipe:
+            return "double_pipe";
+        case Token::Type::exclamation:
+            return "exclamation";
+        case Token::Type::neq:
+            return "neq";
+        case Token::Type::lt:
+            return "lt";
+        case Token::Type::gt:
+            return "gt";
+        case Token::Type::lte:
+            return "lte";
+        case Token::Type::gte:
+            return "gte";
+        default:
+        {
+            if (auto it = std::find_if(reservedIdentifiers.begin(), reservedIdentifiers.end(), [this](const std::pair<std::string, Type> &p)
+                                       { return p.second == type; });
+                it != reservedIdentifiers.end())
+                return it->first;
+            return "undefined";
+        }
+        }
+    }
+
 }
