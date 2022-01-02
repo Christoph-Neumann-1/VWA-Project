@@ -7,10 +7,16 @@ namespace vwa
 {
     struct Pass1Result
     {
+        struct Type
+        {
+            std::string name;
+            uint32_t pointerDepth = 0;
+        };
+
         struct Parameter
         {
             std::string name;
-            std::string type;
+            Type type;
             bool isMutable;
             Node body;
         };
@@ -25,7 +31,7 @@ namespace vwa
         struct Function
         {
             std::string name;
-            std::string returnType;
+            Type returnType;
             std::vector<Parameter> parameters;
             bool constexpr_;
             bool exported;

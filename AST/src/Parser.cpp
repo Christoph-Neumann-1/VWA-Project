@@ -14,6 +14,7 @@ namespace vwa
     [[nodiscard]] static Pass1Result::Function parseFunction(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Pass1Result::Struct parseStruct(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static std::vector<Pass1Result::Parameter> parseParameterList(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Pass1Result::Type parseType(const std::vector<Token> &tokens, size_t &pos);
 
     Pass1Result buildTree(const std::vector<Token> &tokens)
     {
@@ -55,11 +56,9 @@ namespace vwa
                     throw std::runtime_error("Imports cannot be constexpr");
                 if (tokens[i + 1].type != Token::Type::string_literal)
                     throw std::runtime_error("Expected string after import");
-                if (tokens[i + 2].type != Token::Type::semicolon)
-                    throw std::runtime_error("Expected semicolon after import");
                 result.imports.push_back({std::get<std::string>(tokens[i + 1].value), exportSymbol});
                 exportSymbol = false;
-                i += 3;
+                i += 2;
                 break;
             }
             case Token::Type::export_:
@@ -112,10 +111,10 @@ namespace vwa
             if (tokens[++pos].type != Token::Type::colon)
                 throw std::runtime_error("Expected : after parameter name");
             if (tokens[++pos].type != Token::Type::id)
-                throw std::runtime_error("Expected type after :");
-            p.type = std::get<std::string>(tokens[pos].value);
+                throw std::runtime_error("Expected typename after :");
+            p.type = parseType(tokens, pos);
             result.push_back(std::move(p));
-            if (tokens[++pos].type == Token::Type::comma)
+            if (tokens[pos].type == Token::Type::comma)
                 ++pos;
         }
         return result;
@@ -124,6 +123,16 @@ namespace vwa
     [[nodiscard]] static Pass1Result::Function parseFunction(const std::vector<Token> &tokens, size_t &pos)
     {
         return {};
+    }
+
+    // Assumes that the first token is a id
+    [[nodiscard]] static Pass1Result::Type parseType(const std::vector<Token> &tokens, size_t &pos)
+    {
+        Pass1Result::Type result;
+        result.name = std::get<std::string>(tokens[pos].value);
+        for (++pos; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
+            result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
+        return result;
     }
 
 }
