@@ -18,7 +18,6 @@ namespace vwa
             std::string name;
             Type type;
             bool isMutable;
-            Node body;
         };
 
         struct Struct
@@ -33,6 +32,7 @@ namespace vwa
             std::string name;
             Type returnType;
             std::vector<Parameter> parameters;
+            Node body;
             bool constexpr_;
             bool exported;
         };

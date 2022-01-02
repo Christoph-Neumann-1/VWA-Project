@@ -57,7 +57,7 @@ namespace vwa
 
         Type type;
         std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool> value = {};
-        std::vector<std::unique_ptr<Node>> children;
+        std::vector<Node> children{};
         uint64_t line = 0;
         // TODO: toString
     };

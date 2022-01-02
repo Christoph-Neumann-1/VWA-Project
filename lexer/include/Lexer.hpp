@@ -101,7 +101,7 @@ namespace vwa
         {"delete", Token::Type::delete_},
         {"tailrec", Token::Type::tailrec},
         {"sizeof", Token::Type::size_of},
-        {"fun", Token::Type::func_},
+        {"func", Token::Type::func_},
     };
 
     std::optional<std::vector<Token>> tokenize(const std::string &input);

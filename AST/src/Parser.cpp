@@ -16,6 +16,9 @@ namespace vwa
     [[nodiscard]] static std::vector<Pass1Result::Parameter> parseParameterList(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Pass1Result::Type parseType(const std::vector<Token> &tokens, size_t &pos);
 
+    [[nodiscard]] static Node parseStatement(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Node parseBlock(const std::vector<Token> &tokens, size_t &pos);
+
     Pass1Result buildTree(const std::vector<Token> &tokens)
     {
         size_t i = 0;
@@ -122,7 +125,26 @@ namespace vwa
 
     [[nodiscard]] static Pass1Result::Function parseFunction(const std::vector<Token> &tokens, size_t &pos)
     {
-        return {};
+        Pass1Result::Function result;
+        if (tokens[++pos].type != Token::Type::id)
+            throw std::runtime_error("Expected identifier after func");
+        result.name = std::get<std::string>(tokens[pos].value);
+        if (tokens[++pos].type != Token::Type::lparen)
+            throw std::runtime_error("Expected ( after func");
+        result.parameters = parseParameterList(tokens, ++pos);
+        if (tokens[pos++].type != Token::Type::rparen)
+            throw std::runtime_error("Expected ) after func");
+        if (tokens[pos].type == Token::Type::arrow_)
+        {
+            ++pos;
+            if (tokens[pos].type != Token::Type::id)
+                throw std::runtime_error("Expected identifier after ->");
+            result.returnType = parseType(tokens, pos);
+        }
+        else
+            result.returnType = {"void", 0};
+        result.body = parseStatement(tokens, pos);
+        return result;
     }
 
     // Assumes that the first token is a id
@@ -132,6 +154,25 @@ namespace vwa
         result.name = std::get<std::string>(tokens[pos].value);
         for (++pos; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
             result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
+        return result;
+    }
+
+    [[nodiscard]] static Node parseStatement(const std::vector<Token> &tokens, size_t &pos)
+    {
+        switch (tokens[pos].type)
+        {
+        case Token::Type::lbrace:
+            return parseBlock(tokens, pos);
+        default:
+            throw std::runtime_error("Not a valid statement");
+        }
+    }
+    [[nodiscard]] static Node parseBlock(const std::vector<Token> &tokens, size_t &pos)
+    {
+        Node result{.type = Node::Type::Block, .line = tokens[pos].line};
+        for (++pos; tokens[pos].type != Token::Type::rbrace; ++pos)
+            result.children.push_back(parseStatement(tokens, pos));
+        ++pos;
         return result;
     }
 
