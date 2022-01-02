@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
+#include <Parser.hpp>
 
 int main(int argc, char **argv)
 {
@@ -29,4 +30,5 @@ int main(int argc, char **argv)
         std::cout << "Failed to generate tokens, see log for details.\nExiting.\n";
         return 1; // TODO: error codes and logger
     }
+    auto tree = vwa::buildTree(tokens.value());
 }

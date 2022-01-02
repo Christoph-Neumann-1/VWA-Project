@@ -32,7 +32,6 @@ namespace vwa
             colon,
 
             dot,
-            arrow_,
             plus,
             minus,
             asterix,
@@ -60,7 +59,6 @@ namespace vwa
             struct_,
             import_,
             export_,
-            const_expr,
             func_,
             let,
             mut_,
@@ -68,6 +66,8 @@ namespace vwa
             eof,
 
             // Not implemented yet
+            arrow_,
+            const_expr,
             thick_arrow_, // Possibly for lambdas
             double_colon, // Namespace
             elipsis,      // Variadic function and for loops
@@ -77,7 +77,7 @@ namespace vwa
             tailrec,
         };
         Type type;
-        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double> value = {};
+        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool> value = {};
         uint64_t line = 0;
         // The function below is for debug purposes only, it doesn't not convert to the original string.
         std::string toString() const;
