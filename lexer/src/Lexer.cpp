@@ -118,7 +118,8 @@ namespace vwa
                 ++lineCounter;
             case ' ':
             case '\t':
-                break;
+                ++current;
+                continue;
 #pragma region brackets
             case '(':
                 tokens.push_back({Token::Type::lparen, {}});
@@ -362,7 +363,14 @@ namespace vwa
                 if (auto i = reservedIdentifiers.find(str); i != reservedIdentifiers.end())
                     tokens.push_back({i->second, {}});
                 else
-                    tokens.push_back({Token::Type::id, std::move(str)});
+                {
+                    if (str == "true")
+                        tokens.push_back({Token::Type::bool_literal, true});
+                    else if (str == "false")
+                        tokens.push_back({Token::Type::bool_literal, false});
+                    else
+                        tokens.push_back({Token::Type::id, std::move(str)});
+                }
                 --current;
             }
             }
