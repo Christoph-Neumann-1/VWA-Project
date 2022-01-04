@@ -494,7 +494,7 @@ namespace vwa
             throw std::runtime_error("Unexpected token");
         }
     }
-    // TODO: in addition to the member access node return a variable of function call node, if only one member is contained
+    // TODO: Check if it is faster to assume a variable first
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
     {
         Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};
@@ -502,6 +502,8 @@ namespace vwa
         {
             if (tokens[pos].type == Token::Type::lparen)
             {
+                if (root.children.size() == 1)
+                    root = std::move(root.children[0]);
                 root = {Node::Type::MemberAccess, {}, {parseFunctionCall(std::move(root), tokens, pos)}, tokens[pos].line};
             }
             else if (tokens[pos].type == Token::Type::dot)
@@ -514,10 +516,10 @@ namespace vwa
             }
             else
             {
+                if (root.children.size() == 1)
+                    return std::move(root.children[0]);
                 return root;
             }
         }
-        root.type = Node::Type::MemberAccess;
-        return root;
     }
 }
