@@ -15,6 +15,7 @@ namespace vwa
 
             string_literal,
             char_literal,
+            bool_literal,
             int_literal,
             long_literal,
             float_literal,

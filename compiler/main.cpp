@@ -22,8 +22,8 @@ int main(int argc, char **argv)
     content.resize(fsize);
     fread(content.data(), fsize, 1, f);
     fclose(f);
-    vwa::Preprocessor preprocessor({});
-    content = preprocessor.process(std::move(content));
+    // vwa::Preprocessor preprocessor({});
+    // content = preprocessor.process(std::move(content));
     auto tokens = vwa::tokenize(content);
     if (!tokens)
     {

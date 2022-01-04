@@ -11,11 +11,14 @@ namespace vwa
     {
         enum class Type
         {
+            Unassigned,
+
             Function,
             Import,
             Struct,
 
             DeclareVar,
+            DiscardValue,
             Type,
             Variable,
             CallFunc,
@@ -25,6 +28,7 @@ namespace vwa
             LiteralD,
             LiteralC,
             LiteralS,
+            LiteralB,
             Block,
             If,
             Else,
@@ -36,6 +40,7 @@ namespace vwa
 
             Plus,
             Minus,
+            UnaryMinus,
             Multiply,
             Divide,
             Modulo,
@@ -52,11 +57,15 @@ namespace vwa
             Assign,
             AddressOf,
             Dereference,
-            DotOperator,
+            MemberAccess,
         };
-
-        Type type;
-        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool> value = {};
+        Type type = Type::Unassigned;
+        struct VarType
+        {
+            std::string name;
+            uint32_t pointerDepth = 0;
+        };
+        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool, VarType> value = {};
         std::vector<Node> children{};
         uint64_t line = 0;
         // TODO: toString
