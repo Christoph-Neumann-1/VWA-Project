@@ -18,4 +18,4 @@ add_subdirectory(compiler)
 add_subdirectory(modules)
 add_subdirectory(test)
 
-add_custom_target(complete DEPENDS compiler vm stdlib)
+add_custom_target(complete DEPENDS compiler stdlib)

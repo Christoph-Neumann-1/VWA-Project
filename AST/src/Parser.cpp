@@ -47,7 +47,7 @@ namespace vwa
                 func.constexpr_ = constexprSymbol;
                 constexprSymbol = false;
                 exportSymbol = false;
-                result.functions.emplace(func.name, std::move(func));
+                result.functions.emplace_back(std::move(func));
                 break;
             }
             case Token::Type::struct_:
@@ -57,7 +57,7 @@ namespace vwa
                 auto struct_ = parseStruct(tokens, i);
                 struct_.exported = exportSymbol;
                 exportSymbol = false;
-                result.structs.emplace(struct_.name, std::move(struct_));
+                result.structs.emplace_back(std::move(struct_));
                 break;
             }
             case Token::Type::import_:
@@ -278,7 +278,7 @@ namespace vwa
         if (tokens[pos].type == Token::Type::assign)
         {
             ++pos;
-            result.children.push_back({Node::Type::Assign, {}, {parseExpression(tokens, pos)}, line});
+            result.children.push_back(parseExpression(tokens, pos)); // TODO: translate into assign in next pass
         }
         if (tokens[pos++].type != Token::Type::semicolon)
             throw std::runtime_error("Expected ; after variable declaration");

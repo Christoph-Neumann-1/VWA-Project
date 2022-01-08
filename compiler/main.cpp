@@ -5,13 +5,14 @@
 #include <filesystem>
 #include <iostream>
 #include <Parser.hpp>
+#include <Compiler.hpp>
 
 int main(int argc, char **argv)
 {
     std::string fileName;
 
     CLI::App app{"VWA Programming language"};
-    app.add_option("-f,--file, file", fileName, "Input file")->required()->check(CLI::ExistingFile);
+    app.add_option("-f,--file, file", fileName, "Input file")->required()->check(CLI::ExistingFile); // TODO: support for multiple files
     CLI11_PARSE(app, argc, argv);
     FILE *f = fopen(fileName.c_str(), "r");
     fseek(f, 0, SEEK_END);
@@ -31,4 +32,6 @@ int main(int argc, char **argv)
         return 1; // TODO: error codes and logger
     }
     auto tree = vwa::buildTree(tokens.value());
+    vwa::Linker linker;
+    auto compiled = vwa::compile({{fileName, tree}}, linker);
 }

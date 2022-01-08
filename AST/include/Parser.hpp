@@ -5,6 +5,7 @@
 
 namespace vwa
 {
+    // TODO: there is no reason this is not using the symbol struct from the linker (This may require significant refactoring)
     struct Pass1Result
     {
         struct Parameter
@@ -37,8 +38,8 @@ namespace vwa
             bool exported;
         };
 
-        std::unordered_map<std::string, Function> functions;
-        std::unordered_map<std::string, Struct> structs;
+        std::vector<Function> functions;
+        std::vector<Struct> structs;
         std::vector<Import> imports;
     };
 
