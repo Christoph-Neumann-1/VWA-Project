@@ -48,6 +48,7 @@ namespace vwa
                         uint64_t pointerDepth;
                     };
                     std::vector<Parameter> parameters;
+                    Parameter returnType;
                     bool constexpr_;
                 };
                 struct Struct
