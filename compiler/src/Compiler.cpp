@@ -1,7 +1,7 @@
 #include <Compiler.hpp>
 
 // TODO: replace all types with ids and remember to save them in cached structs
-
+// TODO: remove copy constructors
 namespace vwa
 {
 
@@ -22,9 +22,14 @@ namespace vwa
     struct Scope
     {
         uint64_t size;
-        uint64_t offset; // From the stack pointer
+        struct Variable
+        {
+            uint64_t offset;
+            uint64_t type;
+        };
         // TODO: UUID for variables
-        std::unordered_map<std::string, uint64_t> variables;
+        std::unordered_map<std::string, Variable>
+            variables;
     };
 
     // This is used by the compiler for fast look up of struct sizes.
@@ -136,7 +141,7 @@ namespace vwa
                 struc.size += getSizeOfType(type, structs);
                 continue;
             }
-            auto mem = getStructInfo(structs[type - numReservedIndices], structs);
+            auto &mem = getStructInfo(structs[type - numReservedIndices], structs);
             struc.size += mem.size;
         }
         struc.state = CachedStruct::Finished;
@@ -145,7 +150,7 @@ namespace vwa
 
     void finishFunctionCache(CachedFunction &func, const std::vector<CachedStruct> &structs)
     {
-        auto f = std::get<Linker::Module::Symbol::Function>(func.symbol->data);
+        auto &f = std::get<Linker::Module::Symbol::Function>(func.symbol->data);
         auto it = std::find_if(structs.begin(), structs.end(), [&f](const CachedStruct &s)
                                { return s.symbol->name == f.returnType.type; });
         func.returnType.type = typeFromString(f.returnType.type, structs);
@@ -180,14 +185,18 @@ namespace vwa
         return {std::move(structs), std::move(functions)};
     }
 
-    void compileMod(const ProcessingResult &result)
-    {
+    // TODO: deduplicate constant pool:
 
-        auto [cachedStructs, cachedFunctions] = generateCache(result);
+    void compileMod(const ProcessingResult &source)
+    {
+        auto [cachedStructs, cachedFunctions] = generateCache(source);
     }
 
     std::vector<const Linker::Module *> compile(std::vector<std::pair<std::string, Pass1Result>> pass1, Linker &linker)
     {
+        Linker::Module mod;
+        mod.exportedSymbols.push_back(Linker::Module::Symbol{.name = "foo", .data = Linker::Module::Symbol::Function{.returnType = {"void", 0}}});
+        linker.provideModule("test", mod);
         // TODO: create a mapping of all symbols, not just exported ones, to their cached values;
         std::vector<ProcessingResult> modules;
         for (auto &[name, mod] : pass1)
@@ -203,7 +212,7 @@ namespace vwa
                 for (auto &param : fun.parameters)
                     parameters.push_back({param.type.name, param.type.pointerDepth});
                 Linker::Module::Symbol sym{
-                    fun.name, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Unlinked, ulong{0} - 1, std::move(parameters), {}, fun.constexpr_}};
+                    fun.name, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Unlinked, ulong{0} - 1, std::move(parameters), {fun.returnType.name, fun.returnType.pointerDepth}, fun.constexpr_}};
                 if (fun.exported)
                     // TODO: remove copy
                     module.exportedSymbols.push_back(sym);

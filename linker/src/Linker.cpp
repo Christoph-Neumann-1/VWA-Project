@@ -47,7 +47,7 @@ namespace vwa
     {
         for (auto &import : importedModules)
         {
-            auto module = linker.requireModule(import);
+            auto &module = linker.requireModule(import);
             for (auto &sym : module.exportedSymbols)
             {
                 auto res = symbols.emplace(sym.name, &sym);

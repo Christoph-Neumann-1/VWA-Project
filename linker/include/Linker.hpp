@@ -72,10 +72,10 @@ namespace vwa
             std::vector<std::string> importedModules;
             std::vector<std::string> exportedImports;
 
-            std::unordered_map<std::string, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
+            std::unordered_map<std::string, const Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
 
             // In theory it would be enough to just store the function names, but this way I can also make sure that the defintions are still the same at runtime.
-            std::vector<std::variant<Symbol, Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.
+            std::vector<std::variant<Symbol, const Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.
 
             void satisfyDependencies(Linker &linker);
 
