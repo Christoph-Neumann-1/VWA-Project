@@ -9,6 +9,8 @@ add_subdirectory(extern/Catch2)
 include(extern/Catch2/extras/Catch.cmake)
 
 add_compile_options(-Wall -Wextra -Wno-unknown-pragmas)
+add_subdirectory(common)
+link_libraries(common)
 add_subdirectory(preprocessor)#This is seperated out because both the linker and the compiler require it
 add_subdirectory(lexer)
 add_subdirectory(AST)
