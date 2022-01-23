@@ -20,15 +20,12 @@ namespace vwa
             DeclareVar,
             DiscardValue,
             Type,
+            Flag, // Bool value for example to store whether a function is constexpr
             Variable,
             CallFunc,
             LiteralI,
-            LiteralL,
             LiteralF,
-            LiteralD,
-            LiteralC,
-            LiteralS,
-            LiteralB,
+            LiteralS, // This should get translated into an int pointer later
             Block,
             If,
             Else,
@@ -65,7 +62,12 @@ namespace vwa
             std::string name;
             uint32_t pointerDepth = 0;
         };
-        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool, VarType> value = {};
+        struct VarTypeCached
+        {
+            size_t index;
+            uint32_t pointerDepth;
+        };
+        std::variant<std::monostate, std::string, char, int32_t, int64_t, float, double, bool, VarType, VarTypeCached> value = {};
         std::vector<Node> children{};
         uint64_t line = 0;
         // TODO: toString

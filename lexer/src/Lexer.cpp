@@ -45,35 +45,16 @@ namespace vwa
         {
         case true:
         {
-            bool isDouble = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'd';
-            Token t{isDouble ? Token::Type::double_literal : Token::Type::float_literal};
-
-            switch (isDouble)
-            {
-            case true:
-                t.value = std::stod(str.data() + begin, &len);
-                break;
-            case false:
-                t.value = std::stof(str.data() + begin, &len);
-                break;
-            }
-            begin += len - !isDouble;
+            Token t{Token::Type::float_literal};
+            t.value = std::stod(str.data() + begin, &len);
+            begin += len - 1;
             return t;
         }
         case false:
         {
-            bool isLong = firstNonDigit == str.size() ? false : str[firstNonDigit] == 'l';
-            Token t{isLong ? Token::Type::long_literal : Token::Type::int_literal};
-            switch (isLong)
-            {
-            case true:
-                t.value = std::stol(str.data() + begin, &len);
-                break;
-            case false:
-                t.value = std::stoi(str.data() + begin, &len);
-                break;
-            }
-            begin += len - !isLong;
+            Token t{Token::Type::int_literal};
+            t.value = std::stol(str.data() + begin, &len);
+            begin += len - 1;
             return t;
         }
         }
@@ -100,7 +81,7 @@ namespace vwa
         }
     }
 
-    std::optional<std::vector<Token>> tokenize(const std::string &input)
+    std::optional<std::vector<Token>> tokenize(const std::string &input, Logger &log)
     {
         size_t current = 0;
         uint64_t lineCounter = 1;
@@ -116,6 +97,7 @@ namespace vwa
                 throw WindowsException();
             case '\n':
                 ++lineCounter;
+                [[fallthrough]];
             case ' ':
             case '\t':
                 ++current;
@@ -332,14 +314,14 @@ namespace vwa
 
                     if (auto escaped = handleEscapedChar(input[current + 2]); escaped)
                     {
-                        tokens.push_back({Token::Type::char_literal, escaped.value()});
+                        tokens.push_back({Token::Type::int_literal, escaped.value()});
                         current += 3;
                     }
                     printf("Tokenizing failed at line %lu. Reason: unknown escape sequence '\\%c'\n", lineCounter, input[current + 2]);
                     return {};
                     break;
                 default:
-                    tokens.push_back({Token::Type::char_literal, input[current + 1]});
+                    tokens.push_back({Token::Type::int_literal, input[current + 1]});
                     current += 2;
                     break;
                 }
@@ -365,9 +347,9 @@ namespace vwa
                 else
                 {
                     if (str == "true")
-                        tokens.push_back({Token::Type::bool_literal, true});
+                        tokens.push_back({Token::Type::int_literal, true});
                     else if (str == "false")
-                        tokens.push_back({Token::Type::bool_literal, false});
+                        tokens.push_back({Token::Type::int_literal, false});
                     else
                         tokens.push_back({Token::Type::id, std::move(str)});
                 }
@@ -386,17 +368,11 @@ namespace vwa
         case Token::Type::id:
             return "id(" + std::get<std::string>(value) + ")";
         case Token::Type::int_literal:
-            return "int(" + std::to_string(std::get<int32_t>(value)) + ")";
-        case Token::Type::long_literal:
-            return "long(" + std::to_string(std::get<int64_t>(value)) + ")";
+            return "int(" + std::to_string(std::get<int64_t>(value)) + ")";
         case Token::Type::float_literal:
-            return "float(" + std::to_string(std::get<float>(value)) + ")";
-        case Token::Type::double_literal:
-            return "double(" + std::to_string(std::get<double>(value)) + ")";
+            return "float(" + std::to_string(std::get<double>(value)) + ")";
         case Token::Type::string_literal:
             return "string(" + std::get<std::string>(value) + ")";
-        case Token::Type::char_literal:
-            return "char(" + std::string(1, std::get<char>(value)) + ")";
         case Token::Type::lparen:
             return "lparen";
         case Token::Type::rparen:

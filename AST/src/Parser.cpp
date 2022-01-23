@@ -274,7 +274,7 @@ namespace vwa
             throw std::runtime_error("Expected typename after :");
         auto line = tokens[pos].line;
         result.children.push_back({Node::Type::Type, parseType(tokens, pos), {}, line});
-        result.children.push_back({Node::Type::LiteralB, isMutable, {}, line});
+        result.children.push_back({Node::Type::Flag, isMutable, {}, line});
         if (tokens[pos].type == Token::Type::assign)
         {
             ++pos;
@@ -455,38 +455,18 @@ namespace vwa
         case Token::Type::int_literal:
         {
             auto line = tokens[pos].line;
-            return {Node::Type::LiteralI, {std::get<int32_t>(tokens[pos++].value)}, {}, line};
-        }
-        case Token::Type::long_literal:
-        {
-            auto line = tokens[pos].line;
-            return {Node::Type::LiteralL, {std::get<int64_t>(tokens[pos++].value)}, {}, line};
+            return {Node::Type::LiteralI, {std::get<int64_t>(tokens[pos++].value)}, {}, line};
         }
         case Token::Type::float_literal:
         {
             auto line = tokens[pos].line;
-            return {Node::Type::LiteralF, {std::get<float>(tokens[pos++].value)}, {}, line};
-        }
-        case Token::Type::double_literal:
-        {
-            auto line = tokens[pos].line;
-            return {Node::Type::LiteralD, {std::get<double>(tokens[pos++].value)}, {}, line};
+            return {Node::Type::LiteralF, {std::get<double>(tokens[pos++].value)}, {}, line};
         }
         // TODO: make sure to treat strings as char*
         case Token::Type::string_literal:
         {
             auto line = tokens[pos].line;
             return {Node::Type::LiteralS, {std::get<std::string>(tokens[pos++].value)}, {}, line};
-        }
-        case Token::Type::char_literal:
-        {
-            auto line = tokens[pos].line;
-            return {Node::Type::LiteralC, {std::get<char>(tokens[pos++].value)}, {}, line};
-        }
-        case Token::Type::bool_literal:
-        {
-            auto line = tokens[pos].line;
-            return {Node::Type::LiteralB, {std::get<bool>(tokens[pos++].value)}, {}, line};
         }
         case Token::Type::id:
             return parseMemberAccess(tokens, pos);
@@ -512,6 +492,7 @@ namespace vwa
             }
             else if (tokens[pos].type == Token::Type::id)
             {
+                // TODO: cache this later on
                 root.children.push_back(Node{Node::Type::Variable, std::get<std::string>(tokens[pos++].value), {}, root.line});
             }
             else

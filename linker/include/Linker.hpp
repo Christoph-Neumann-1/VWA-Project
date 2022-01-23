@@ -35,21 +35,22 @@ namespace vwa
                     };
 
                     Type type = Unlinked;
-                    union
+                    // This looks like this, because I got a missing field initializer warning, even though there was a default initializer.
+                    union Implementation
                     {
                         size_t index;
                         bc::BcToken *address;
                         FFIFunc ffi;
-                    };
+                    } impl{0};
                     // TODO: consider storing const
                     struct Parameter
                     {
                         std::string type;
                         uint64_t pointerDepth;
                     };
-                    std::vector<Parameter> parameters;
+                    std::vector<Parameter> parameters{};
                     Parameter returnType;
-                    bool constexpr_;
+                    bool constexpr_ = false;
                 };
                 struct Struct
                 {

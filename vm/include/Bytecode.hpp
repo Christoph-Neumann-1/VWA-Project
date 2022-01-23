@@ -1,4 +1,7 @@
 #pragma once
+#include <cstdint>
+
+// TODO: add a way to handle chars, either by adding the type, or by adding a function in the standard library
 
 namespace vwa::bc
 {
@@ -35,9 +38,6 @@ namespace vwa::bc
         ReadRel,  // Reads data relative to the base pointer. Used for local variables and access to the constant pool. Args: i64 offset, u64 nBytes If the signed offset causes problems I will add a bool indicating whether to add or subtract.
         WriteRel, // Writes data relative to the base pointer. Used for local variables and access to the constant pool. Args: i64 offset, u64 nBytes
 
-        // Arithmetic For now every data type has its own instruction. If this slows down the vm I might just convert all integer types to long first.
-        // There are no operations for characters, if for some reason you must perform arithmetic on characters, they are converted to integers first.
-        // Pointers are assumed to be longs
         // TODO: unsigned types
         // TODO: consider negation instructions
         AddI,
@@ -47,52 +47,16 @@ namespace vwa::bc
         ModI,
         PowerI,
 
-        AddL,
-        SubL,
-        MulL,
-        DivL,
-        ModL,
-        PowerL,
-
         AddF,
         SubF,
         MulF,
         DivF,
         PowerF,
 
-        AddD,
-        SubD,
-        MulD,
-        DivD,
-        PowerD,
-
         // Conversion
-        LtoI,
         FtoI,
-        DtoI,
-        CtoI,
-
-        ItoL,
-        FtoL,
-        DtoL,
-        CtoL,
-
         ItoF,
-        LtoF,
-        DtoF,
-        CtoF,
 
-        ItoD,
-        LtoD,
-        FtoD,
-        CtoD,
-
-        ItoC,
-        LtoC,
-        FtoC,
-        DtoC,
-
-        // Boolean logic
         And, // Args: 2 chars(booleans)
         Or,  // Args: 2 chars(booleans)
         Not, // Args: 1 char(boolean)
@@ -105,28 +69,11 @@ namespace vwa::bc
         EqualF,
         NotEqualF,
 
-        GreaterThanD,
-        LessThanD,
-        GreaterThanOrEqualD,
-        LessThanOrEqualD,
-        EqualD,
-        NotEqualD,
-
         // Integer types don't have the orEqual instructions since they can be rewritten using other instructions.
         GreaterThanI,
         LessThanI,
         EqualI,
         NotEqualI,
-
-        GreaterThanL,
-        LessThanL,
-        EqualL,
-        NotEqualL,
-
-        GreaterThanC,
-        LessThanC,
-        EqualC,
-        NotEqualC,
     };
     union BcToken
     {

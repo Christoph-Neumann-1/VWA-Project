@@ -4,6 +4,7 @@
 #include <variant>
 #include <optional>
 #include <unordered_map>
+#include <Log.hpp>
 
 namespace vwa
 {
@@ -14,12 +15,8 @@ namespace vwa
             id,
 
             string_literal,
-            char_literal,
-            bool_literal,
             int_literal,
-            long_literal,
             float_literal,
-            double_literal,
             // TODO: unsigned_literal,
             rbrace,
             lbrace,
@@ -105,5 +102,5 @@ namespace vwa
         {"func", Token::Type::func_},
     };
 
-    std::optional<std::vector<Token>> tokenize(const std::string &input);
+    std::optional<std::vector<Token>> tokenize(const std::string &input, Logger &log);
 }

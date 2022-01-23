@@ -2,7 +2,9 @@
 #include <Parser.hpp>
 #include <Bytecode.hpp>
 #include <Linker.hpp>
+#include <Log.hpp>
+
 namespace vwa
 {
-    std::vector<const Linker::Module *> compile(std::vector<std::pair<std::string, Pass1Result>> pass1, Linker &linker);
+    std::vector<const Linker::Module *> compile(std::vector<std::pair<std::string, Pass1Result>> pass1, Linker &linker, Logger &log);
 }
