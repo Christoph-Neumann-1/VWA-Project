@@ -1,4 +1,5 @@
 #include <ProcessInput.hpp>
+#include <GenerateByteCode.hpp>
 
 // TODO: replace all types with ids and remember to save them in cached structs
 // TODO: remove copy constructors
@@ -12,6 +13,8 @@ namespace vwa
             return I64;
         if (str == "float")
             return F64;
+        if (str == "char")
+            return U8;
 
         auto it = std::find_if(structs.begin(), structs.end(), [&str](const CachedStruct &s)
                                { return s.symbol->name == str; });
@@ -29,6 +32,8 @@ namespace vwa
         case F64:
         case I64:
             return 8;
+        case U8:
+            return 1;
         default:
             return structs[t - numReservedIndices].size;
         }
@@ -78,6 +83,7 @@ namespace vwa
         cache.map.insert({"void", {Void, Cache::Type::Struct}});
         cache.map.insert({"int", {I64, Cache::Type::Struct}});
         cache.map.insert({"float", {F64, Cache::Type::Struct}});
+        cache.map.insert({"char", {U8, Cache::Type::Struct}});
 
         for (auto &sym : result.module->symbols)
             if (std::holds_alternative<Linker::Module::Symbol::Function>(sym.second->data))
@@ -164,7 +170,7 @@ namespace vwa
 
     // TODO: deduplicate constant pool:
 
-    void compileMod(const ProcessingResult &source, Logger &log)
+    void compileMod(const ProcessingResult &source, Pass1Result &pass1, Logger &log)
     {
         log << Logger::Debug << "Generating cache...\n";
         auto cache = generateCache(source, log);
@@ -180,6 +186,7 @@ namespace vwa
                 log << Logger::Debug << "Skipping function: " << func.symbol->name << ". Reason: no body\n";
             }
         }
+        GenModBc(source.module, pass1, &cache, log);
     }
 
     std::vector<const Linker::Module *> compile(std::vector<std::pair<std::string, Pass1Result>> pass1, Linker &linker, Logger &log)
@@ -218,12 +225,6 @@ namespace vwa
                     // TODO: remove copy
                     module.exportedSymbols.push_back(sym);
                 result.internalFunctions.push_back(std::move(sym));
-                if (fun.name == "main")
-                {
-                    if (module.main)
-                        throw std::runtime_error("Multiple main functions");
-                    module.main = &module.exportedSymbols.back();
-                }
             }
             for (auto &struct_ : mod.structs)
             {
@@ -247,7 +248,7 @@ namespace vwa
         for (size_t i = 0; i < modules.size(); i++)
         {
             log << Logger::Info << "Compiling module " << pass1[i].first << "\n";
-            compileMod(modules[i], log);
+            compileMod(modules[i], pass1[i].second, log);
         }
         log << Logger::Info << "Compilation complete\n";
         std::vector<const Linker::Module *> result;

@@ -314,7 +314,7 @@ namespace vwa
 
                     if (auto escaped = handleEscapedChar(input[current + 2]); escaped)
                     {
-                        tokens.push_back({Token::Type::int_literal, escaped.value()});
+                        tokens.push_back({Token::Type::int_literal, int64_t{escaped.value()}});
                         current += 3;
                     }
                     printf("Tokenizing failed at line %lu. Reason: unknown escape sequence '\\%c'\n", lineCounter, input[current + 2]);

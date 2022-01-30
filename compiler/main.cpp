@@ -7,6 +7,7 @@
 #include <Parser.hpp>
 #include <Compiler.hpp>
 #include <Log.hpp>
+#include <VM.hpp>
 
 int main(int argc, char **argv)
 {
@@ -44,4 +45,73 @@ int main(int argc, char **argv)
     auto tree = buildTree(tokens.value());
     Linker linker;
     auto compiled = compile({{fileName, tree}}, linker, log);
+
+    const bc::BcToken *main{0};
+    for (auto &module : compiled)
+    {
+        if (module->main)
+        {
+            if (main)
+            {
+                log << Logger::Error << "Multiple main functions found\n";
+                return 1;
+            }
+            else
+                main = std::get<std::vector<bc::BcToken>>(module->data).data() + module->main - 1;
+        }
+    }
+    if (!main)
+    {
+        log << Logger::Error << "No entry point found\n";
+        return -1;
+    }
+
+    VM vm;
+    // bc::BcToken code[] = {
+    //     bc::Push64,
+    //     2,0,0,0,
+    //     0,0,0,0,
+    //     bc::JumpFuncRel,
+    //     18,0,0,0,
+    //     0,0,0,0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::Exit,
+    //     bc::Push,
+    //     16, 0, 0, 0,
+    //     0, 0, 0, 0,
+    //     bc::ReadRel,
+    //     16, 0, 0, 0,
+    //     0, 0, 0, 0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::Dup,
+    //     8, 0, 0, 0,
+    //     0, 0, 0, 0,
+    //     bc::WriteRel,
+    //     24,0,0,0,
+    //     0,0,0,0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::WriteRel,
+    //     32,0,0,0,
+    //     0,0,0,0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::ReadRel,
+    //     24,0,0,0,
+    //     0,0,0,0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::ReadRel,
+    //     32,0,0,0,
+    //     0,0,0,0,
+    //     8,0,0,0,
+    //     0,0,0,0,
+    //     bc::AddI,
+    //     bc::Return,
+    //     8,0,0,0,
+    //     0,0,0,0,};
+    auto res = vm.exec(main);
+    return res.statusCode == VM::ExitCode::Success ? *reinterpret_cast<int64_t *>(vm.stack.top - 8) : res.exitCode;
 }

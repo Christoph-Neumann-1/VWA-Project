@@ -12,14 +12,17 @@
 namespace vwa
 {
     // TODO: make the linker calculate and store the size of symbols to avoid redundant computation
+    // TODO: store the position of function calls as possible optimization
+    class VM;
     class Linker
     {
 
     public:
-        using FFIFunc = void (*)(uint8_t *);
+        using FFIFunc = void (*)(VM *vm, uint8_t *stackTop);
 
         struct Module
         {
+            // TODO: make this more efficient
             std::variant<std::monostate, void *, std::vector<bc::BcToken>> data;
 
             struct Symbol
@@ -66,7 +69,7 @@ namespace vwa
                 std::variant<Function, Struct> data;
             };
 
-            Symbol *main{0};
+            size_t main{0}; // Offset by one
 
             std::vector<Symbol> exportedSymbols;
 

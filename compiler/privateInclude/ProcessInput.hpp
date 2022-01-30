@@ -1,11 +1,10 @@
 #pragma once
 
 #include <Compiler.hpp>
-
 namespace vwa
 {
 
-    static constexpr size_t numReservedIndices = 3;
+    static constexpr size_t numReservedIndices = 4;
 
     // To make live easier for myself I decided that 2 types is good enough for now, if you are using this language you are clearly not worried about performance anyway
     enum PrimitiveTypes
@@ -13,13 +12,14 @@ namespace vwa
         Void,
         I64,
         F64,
+        U8, // Char type for c interop. This isn\t actually used to store characters, the compiler translates it into a I64 instead.
     };
 
     // Used for storing the true location of variables
     // If I implement stack pointer free functions I might also store more information
     struct Scope
     {
-        uint64_t size;
+        uint64_t size = 0;
         struct Variable
         {
             uint64_t offset;
@@ -27,7 +27,7 @@ namespace vwa
         };
         // TODO: UUID for variables
         std::unordered_map<std::string, Variable>
-            variables;
+            variables{};
     };
 
     // This is used by the compiler for fast look up of struct sizes.
@@ -68,8 +68,13 @@ namespace vwa
         Parameter returnType{};
         uint64_t refCount = 0;
         const Linker::Module::Symbol *symbol{0};
-        Node *body;
+        union
+        {
+            Node *body;
+            uint64_t address; // After completely compiling this function the address is stored here.
+        };
         bool internal;
+        bool finished = false;
     };
 
     struct Cache
@@ -84,6 +89,7 @@ namespace vwa
         std::vector<CachedFunction> functions{};
     };
 
+    size_t getSizeOfType(size_t t, const std::vector<CachedStruct> &structs);
     struct ProcessingResult
     {
         Linker::Module *module;

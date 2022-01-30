@@ -13,10 +13,6 @@ namespace vwa
         {
             Unassigned,
 
-            Function,
-            Import,
-            Struct,
-
             DeclareVar,
             DiscardValue,
             Type,
