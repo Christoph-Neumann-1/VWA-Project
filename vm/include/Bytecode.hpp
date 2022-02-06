@@ -2,6 +2,7 @@
 #include <cstdint>
 
 // TODO: add a way to handle chars, either by adding the type, or by adding a function in the standard library
+// TODO: consider adding noop
 
 namespace vwa::bc
 {
@@ -64,6 +65,7 @@ namespace vwa::bc
         MulF,
         DivF,
         PowerF,
+        NegF,
 
         // Conversion
         FtoI,

@@ -73,6 +73,7 @@
         "typeindex": "cpp",
         "codecvt": "cpp",
         "filesystem": "cpp",
-        "ciso646": "cpp"
+        "ciso646": "cpp",
+        "source_location": "cpp"
     }
 }

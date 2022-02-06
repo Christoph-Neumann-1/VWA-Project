@@ -22,9 +22,10 @@ namespace vwa
             throw std::runtime_error("Could not find struct: " + str);
         return numReservedIndices + std::distance(structs.begin(), it);
     }
-
-    size_t getSizeOfType(size_t t, const std::vector<CachedStruct> &structs)
+    size_t getSizeOfType(size_t t, size_t ptr, const std::vector<CachedStruct> &structs)
     {
+        if (ptr)
+            return 8;
         switch (t)
         {
         case Void:
@@ -56,7 +57,7 @@ namespace vwa
             if (type < numReservedIndices)
             {
                 // We can't use this function for structs,since it is unknown whether their size has been calculated yet
-                struc.size += getSizeOfType(type, structs);
+                struc.size += getSizeOfType(type, 0, structs);
                 continue;
             }
             auto &mem = getStructInfo(structs[type - numReservedIndices], structs);

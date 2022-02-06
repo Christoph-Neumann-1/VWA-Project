@@ -83,6 +83,8 @@ namespace vwa
 
     std::optional<std::vector<Token>> tokenize(const std::string &input, Logger &log)
     {
+        log << Logger::Info << "Beginning tokenization\n";
+        log << Logger::Warning << "Missing logs for tokenization\n";
         size_t current = 0;
         uint64_t lineCounter = 1;
         std::vector<Token> tokens;

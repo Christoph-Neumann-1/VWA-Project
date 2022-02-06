@@ -2,18 +2,18 @@
 #include <ProcessInput.hpp>
 namespace vwa
 {
-    template <typename T, typename U>
+    template <typename U>
     // TODO: is there any reason to use is_same here?
-    void pushToBc(std::vector<T> &bc, U value) // requires(typeid(T) == typeid(bc::BcToken) || typeid(T) == typeid(uint8_t))
-        requires requires(std::vector<T> t)
+    void pushToBc(std::vector<bc::BcToken> &bc, U value) // requires(typeid(T) == typeid(bc::BcToken) || typeid(T) == typeid(uint8_t))
+        requires requires(std::vector<bc::BcToken> t)
     {
-        t.push_back(T{uint8_t{}});
+        t.push_back(bc::BcToken{uint8_t{}});
     }
     {
         uint8_t *data = reinterpret_cast<uint8_t *>(&value);
         for (size_t i = 0; i < sizeof(U); i++)
         {
-            bc.push_back(T{data[i]});
+            bc.push_back(bc::BcToken{data[i]});
         }
     }
 

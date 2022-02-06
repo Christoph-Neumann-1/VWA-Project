@@ -117,20 +117,20 @@ namespace vwa
             }
             case ReadAbs:
             {
-                auto addr = *reinterpret_cast<const void **>(const_cast<bc::BcToken *>(bc + 1));
-                auto size = *reinterpret_cast<const uint64_t *>((bc + 9));
+                auto addr = stack.pop<void *>();
+                auto size = *reinterpret_cast<const uint64_t *>((bc + 1));
                 memcpy(stack.top, addr, size);
                 stack.top += size;
-                bc += 17;
+                bc += 9;
                 continue;
             }
             case WriteAbs:
             {
-                auto addr = *reinterpret_cast<void **>(const_cast<bc::BcToken *>(bc + 1));
-                auto size = *reinterpret_cast<const uint64_t *>((bc + 9));
+                auto addr = stack.pop<void *>();
+                auto size = *reinterpret_cast<const uint64_t *>((bc + 1));
                 memcpy(addr, stack.top - size, size);
                 stack.top -= size;
-                bc += 17;
+                bc += 9;
                 continue;
             }
             // It might be easier to implement this using offsets from the first valid element on the stack, but it would involve additional computation, or negative offsets,
@@ -231,6 +231,10 @@ namespace vwa
                 ++bc;
                 continue;
             }
+            case NegF:
+                stack.push(-stack.pop<double>());
+                ++bc;
+                continue;
             case DivF:
             {
                 auto rhs = stack.pop<double>();

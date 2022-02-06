@@ -19,11 +19,16 @@ namespace vwa
     // If I implement stack pointer free functions I might also store more information
     struct Scope
     {
-        uint64_t size = 0;
+        uint64_t size;
+        uint64_t offset;
+
+        Scope(uint64_t size, uint64_t offset) : size(size), offset(offset) {}
         struct Variable
         {
             uint64_t offset;
             uint64_t type;
+            uint64_t pointerDepth;
+            Variable(uint64_t offset, uint64_t type, uint64_t pointerDepth) : offset(offset), type(type), pointerDepth(pointerDepth) {}
         };
         // TODO: UUID for variables
         std::unordered_map<std::string, Variable>
@@ -89,7 +94,6 @@ namespace vwa
         std::vector<CachedFunction> functions{};
     };
 
-    size_t getSizeOfType(size_t t, const std::vector<CachedStruct> &structs);
     struct ProcessingResult
     {
         Linker::Module *module;
@@ -98,5 +102,5 @@ namespace vwa
         std::unordered_map<std::string, Node *> FunctionBodies; // This is temporary, it only has to store data till the cache is created.
     };
 
-    size_t getSizeOfType(size_t t, const std::vector<CachedStruct> &structs);
+    size_t getSizeOfType(size_t t, size_t ptr, const std::vector<CachedStruct> &structs);
 }

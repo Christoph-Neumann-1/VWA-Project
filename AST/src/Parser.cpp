@@ -2,7 +2,7 @@
 
 namespace vwa
 {
-
+    // TODO: allow statements where expressions are expected
     /*
      * Function layout:
      Id: name
@@ -423,6 +423,7 @@ namespace vwa
         {
         case Token::Type::plus:
             return parseUnary(tokens, ++pos);
+            // TODO: make lexer handle negative numbers
         case Token::Type::minus:
         {
             auto line = tokens[pos].line;
@@ -447,7 +448,7 @@ namespace vwa
             return parsePrimary(tokens, pos);
         }
     }
-
+    // FIXME: I forgot testing parantheses
     [[nodiscard]] static Node parsePrimary(const std::vector<Token> &tokens, size_t &pos)
     {
         switch (tokens[pos].type)
@@ -470,6 +471,15 @@ namespace vwa
         }
         case Token::Type::id:
             return parseMemberAccess(tokens, pos);
+        case Token::Type::lparen:
+        {
+            auto result = parseExpression(tokens, ++pos);
+            if (tokens[pos++].type != Token::Type::rparen)
+            {
+                throw std::runtime_error("Expected ')'");
+            }
+            return result;
+        }
         default:
             throw std::runtime_error("Unexpected token");
         }
