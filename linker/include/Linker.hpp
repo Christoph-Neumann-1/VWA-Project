@@ -18,6 +18,7 @@ namespace vwa
     {
 
     public:
+        //TODO: remove second parameter
         using FFIFunc = void (*)(VM *vm, uint8_t *stackTop);
 
         struct Module

@@ -89,7 +89,12 @@ namespace vwa
         for (auto &sym : result.module->symbols)
             if (std::holds_alternative<Linker::Module::Symbol::Function>(sym.second->data))
             {
-                cache.functions.push_back(CachedFunction{.symbol = sym.second, .body = ({ auto res = result.FunctionBodies.find(sym.first); res==result.FunctionBodies.end()?nullptr:res->second; }), .internal = false});
+                cache.functions.push_back(CachedFunction{.symbol = sym.second, .body = (
+                                                                                   {
+                                                                                       auto res = result.FunctionBodies.find(sym.first);
+                                                                                       res == result.FunctionBodies.end() ? nullptr : res->second;
+                                                                                   }),
+                                                         .internal = false});
                 if (auto res = cache.map.insert({sym.first, {cache.functions.size() - 1, cache.Function}}).second; !res)
                 {
                     log << Logger::Error << "Duplicate symbol: " << sym.first << '\n';
@@ -107,7 +112,12 @@ namespace vwa
             }
         for (auto &func : result.internalFunctions)
         {
-            cache.functions.push_back(CachedFunction{.symbol = &func, .body = ({ auto res = result.FunctionBodies.find(func.name); res==result.FunctionBodies.end()?nullptr:res->second; }), .internal = true});
+            cache.functions.push_back(CachedFunction{.symbol = &func, .body = (
+                                                                          {
+                                                                              auto res = result.FunctionBodies.find(func.name);
+                                                                              res == result.FunctionBodies.end() ? nullptr : res->second;
+                                                                          }),
+                                                     .internal = true});
             if (auto res = cache.map.insert({func.name, {cache.functions.size() - 1, cache.Function}}).second; !res)
             {
                 log << Logger::Error << "Duplicate symbol: " << func.name << '\n';
@@ -193,10 +203,6 @@ namespace vwa
     std::vector<const Linker::Module *> compile(std::vector<std::pair<std::string, Pass1Result>> pass1, Linker &linker, Logger &log)
     {
         log << Logger::Info << "Beginning compilation\n";
-        log << Logger::Debug << "Injecting fake module\n";
-        Linker::Module mod;
-        mod.exportedSymbols.push_back(Linker::Module::Symbol{.name = "foo", .data = Linker::Module::Symbol::Function{.returnType = {"void", 0}}});
-        linker.provideModule("test", mod);
         // TODO: create a mapping of all symbols, not just exported ones, to their cached values;
         std::vector<ProcessingResult> modules;
 
@@ -242,7 +248,11 @@ namespace vwa
                     module.exportedImports.push_back(import.name);
                 else
                     module.importedModules.push_back(import.name);
-            modules.push_back(({ result.module = &linker.provideModule(name, std::move(module)); std::move(result); }));
+            modules.push_back((
+                {
+                    result.module = &linker.provideModule(name, std::move(module));
+                    std::move(result);
+                }));
         }
         log << Logger::Debug << "Locating imports\n";
         linker.satisfyDependencies();

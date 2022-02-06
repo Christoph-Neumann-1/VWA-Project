@@ -537,10 +537,15 @@ namespace vwa
                 if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
                     bc.push_back({*instr});
             }
-            if (func.finished)
+            if (func.finished && func.internal)
             {
                 bc.push_back({bc::JumpFuncRel});
                 pushToBc<int64_t>(bc, func.address - bc.size() + 1);
+            }
+            else if (auto f = std::get<Linker::Module::Symbol::Function>(func.symbol->data); f.type == Linker::Module::Symbol::Function::Type::External)
+            {
+                bc.push_back({bc::JumpFFI});
+                pushToBc<size_t>(bc, f.impl.index);
             }
             else
             {

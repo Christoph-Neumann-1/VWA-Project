@@ -79,7 +79,7 @@ namespace vwa
             int64_t address; // After completely compiling this function the address is stored here.
         };
         bool internal;
-        bool finished = false;
+        bool finished = false; //TODO: set for ffi
     };
 
     struct Cache

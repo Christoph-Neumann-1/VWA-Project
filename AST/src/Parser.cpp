@@ -254,10 +254,12 @@ namespace vwa
             if (tokens[pos].type == Token::Type::eof)
                 throw std::runtime_error("Unexpected end of file");
             result.children.push_back(parseExpression(tokens, pos));
-            if (tokens[pos++].type == Token::Type::rparen)
+            if (tokens[pos].type == Token::Type::rparen)
                 break;
+            else
+                ++pos;
         }
-        // ++pos;
+        ++pos;
         return result;
     }
 

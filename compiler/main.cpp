@@ -9,6 +9,7 @@
 #include <Log.hpp>
 #include <VM.hpp>
 #include <chrono>
+#include <dlfcn.h>
 
 int main(int argc, char **argv)
 {
@@ -49,6 +50,23 @@ int main(int argc, char **argv)
 
     auto tree = buildTree(tokens.value());
     Linker linker;
+    auto handle = dlopen("modules/std/bin/std.native", RTLD_LAZY);
+    if (!handle)
+    {
+        log << Logger::Error << "Failed to load std.native";
+        log << dlerror();
+        return 1;
+    }
+    auto loadFcn = reinterpret_cast<Linker::Module *(*)()>(dlsym(handle, "MODULE_LOAD"));
+    if (!loadFcn)
+    {
+        log << Logger::Error << "Failed to load module loader";
+        log << dlerror();
+        return 1;
+    }
+    auto module = loadFcn();
+    module->data = handle;
+    linker.provideModule("std", std::move(*module));
     auto compiled = compile({{fileName, tree}}, linker, log);
 
     const bc::BcToken *main{0};
