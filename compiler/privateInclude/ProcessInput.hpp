@@ -71,12 +71,12 @@ namespace vwa
         // I did not want to waste addtional space on loop detection, so I just repurposed the unused space in booleans
         std::vector<Parameter> args{};
         Parameter returnType{};
-        uint64_t refCount = 0;
+        uint64_t refCount = 0; //TODO: implement
         const Linker::Module::Symbol *symbol{0};
         union
         {
             Node *body;
-            uint64_t address; // After completely compiling this function the address is stored here.
+            int64_t address; // After completely compiling this function the address is stored here.
         };
         bool internal;
         bool finished = false;

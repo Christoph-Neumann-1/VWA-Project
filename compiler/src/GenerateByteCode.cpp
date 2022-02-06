@@ -124,6 +124,8 @@ namespace vwa
             scope.size += getSizeOfType(funcData.args[i].type, funcData.args[i].pointerDepth, cache->structs);
         }
         scopes.push_back(scope);
+        funcData.address = bc.size();
+        funcData.finished = true; //Indicates that the adress is final.
         // TODO: store the offsets somewhere What was I thinking?
         // FIXME: consider all outcomes, like having a value at the end of a void function and such
         auto res = compileNode(module, cache, &func.body, NodeResult{funcData.returnType.type, funcData.returnType.pointerDepth}, constPool, bc, scopes, log);
@@ -504,6 +506,49 @@ namespace vwa
             }
             log << Logger::Error << "Cannot take address of non-variable yet\n";
             throw std::runtime_error("Did not find variable");
+        }
+        case Node::Type::CallFunc:
+        {
+            //No support for function pointers yet
+            auto &name = std::get<std::string>(node->children[0].value);
+            auto it = cache->map.find(name);
+            if (it == cache->map.end())
+            {
+                log << Logger::Error << "Function " << name << " not found\n";
+                throw std::runtime_error("Function not found");
+            }
+            if (it->second.second == Cache::Type::Struct)
+            {
+                log << Logger::Error << "Symbol " << name << " is a struct, not a function\n";
+                throw std::runtime_error("Symbol is a struct, not a function");
+            }
+            auto &func = cache->functions[it->second.first];
+            auto nArgs = node->children.size() - 1;
+            if (nArgs != func.args.size())
+            {
+                log << Logger::Error << "Function " << name << " expects " << func.args.size() << " arguments, but got " << nArgs << "\n";
+                throw std::runtime_error("Function expects different number of arguments");
+            }
+            size_t argSize = 0;
+            for (size_t i = 0; i < nArgs; i++)
+            {
+                argSize += getSizeOfType(func.args[i].type, func.args[i].pointerDepth, cache->structs);
+                auto arg = compileNode(module, cache, &node->children[i + 1], fRetT, constPool, bc, scopes, log);
+                if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
+                    bc.push_back({*instr});
+            }
+            if (func.finished)
+            {
+                bc.push_back({bc::JumpFuncRel});
+                pushToBc<int64_t>(bc, func.address - bc.size() + 1);
+            }
+            else
+            {
+                bc.push_back({bc::CallFunc});
+                pushToBc<uint64_t>(bc, it->second.first); //Gets replaced by adress or more permanent index later}
+            }
+            pushToBc<uint64_t>(bc, argSize);
+            return {func.returnType.type, func.returnType.pointerDepth};
         }
         }
 

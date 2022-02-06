@@ -248,13 +248,16 @@ namespace vwa
         Node result{Node::Type::CallFunc, {}, {func}, func.line};
         if (tokens[pos].type != Token::Type::lparen)
             throw std::runtime_error("Expected ( after function call");
-        for (++pos; tokens[pos].type != Token::Type::rparen; ++pos)
+        //FIXME: where am I handling commas?
+        for (++pos; tokens[pos].type != Token::Type::rparen;)
         {
             if (tokens[pos].type == Token::Type::eof)
                 throw std::runtime_error("Unexpected end of file");
             result.children.push_back(parseExpression(tokens, pos));
+            if (tokens[pos++].type == Token::Type::rparen)
+                break;
         }
-        ++pos;
+        // ++pos;
         return result;
     }
 
