@@ -17,6 +17,7 @@ namespace vwa
             string_literal,
             int_literal,
             float_literal,
+            size_of,
             // TODO: unsigned_literal,
             rbrace,
             lbrace,
@@ -69,7 +70,6 @@ namespace vwa
             thick_arrow_, // Possibly for lambdas
             double_colon, // Namespace
             elipsis,      // Variadic function and for loops
-            size_of,
             new_,
             delete_,
             tailrec,

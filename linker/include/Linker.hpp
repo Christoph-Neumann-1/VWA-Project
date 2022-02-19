@@ -9,6 +9,9 @@
 
 // TODO: consider memory mapping modules
 
+// FIXME: when two modules have different definitions for a struct code calling into that module will still compile,
+//  it should be an error. this requires changing the format of modules, so I am reluctant to do that.
+
 namespace vwa
 {
     // TODO: make the linker calculate and store the size of symbols to avoid redundant computation
@@ -18,8 +21,8 @@ namespace vwa
     {
 
     public:
-        //TODO: remove second parameter
-        using FFIFunc = void (*)(VM *vm, uint8_t *stackTop);
+        // TODO: remove second parameter
+        using FFIFunc = void (*)(VM *vm);
 
         struct Module
         {
@@ -44,7 +47,12 @@ namespace vwa
                     {
                         size_t index;
                         bc::BcToken *address;
-                        FFIFunc ffi;
+                        struct
+                        {
+                            FFIFunc ffi;
+                            void *directLink; // I need to be careful here, because there might be conversions happening
+                            // A way to circumwent that is to set it to null if that is the case and instead invoke the ffilink after pushing stuff to the stack.
+                        };
                     } impl{0};
                     // TODO: consider storing const
                     struct Parameter

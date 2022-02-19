@@ -22,6 +22,7 @@ namespace vwa::bc
         JumpRelIfFalse, // Jump to adress if the last value is false. Args: bool condition,i64 address(passed in bytecode)
         JumpRelIfTrue,  // Jump to the address if the argument is true. Args:  bool condition,i64 address(passed in bytecode)
         JumpFuncRel,    // Jump to the address, while setting the base pointer and return address. Args: i64 address, u64 nBytes for args, all passed in bytecode
+        JumpFPtr,       //Either calls a ffi or normal function. Args: see above
         // Btw JumpFuncRel is also abused by the compiler to store indices for internal functions if their position is unknown.
         JumpFuncAbs, // Call a function from an other module(or maybe a function pointer) Same as JumpFuncRel, but the address is absolute.
         JumpFFI,     // Jump to the ffi function at the given address. Args: u64 address. No stack pointer needs to be set. nBytes is not required for this instruction, but the 8 bytes
@@ -96,6 +97,7 @@ namespace vwa::bc
         LessThanOrEqualI,
         EqualI,
         NotEqualI,
+        LastInstr, //This is not a real instruction, it is just meant as a place holder for when an array of opcodes is necessary as cpp doesn't provide a way to get the size of an enum
     };
     union BcToken
     {

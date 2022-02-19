@@ -1,0 +1,46 @@
+Idea for advanced FFI:
+A file defining the interface. It declares imported/exported functions and modules in a human readable format. From this file a cpp file is produced. It contains all the definitions, translated to cpp as well as entry points. A header will also be generated containing the declarations for ffi functions in the correct format. Optionally this can take care of type casting by allowing mapping of a ffi name to a differnt function pointer. I discourage this. The advantage of that would be to easily make things like the c standard library available. Processing this file should be easy, so no advanced functionality. The preprocessor should still be included though. While technically the declaration file should suffince for structs, the entry point function will still export structs and such, to remove the need to include the interface file for a library. The option to parse it should still be there, if no module has been compiledyet. This may be because of mutually dependant modules.
+
+Syntax example:
+import std;
+
+export func foo(int,int)->int;
+//This is here to avoid importing every function, thereby impacting loading time
+import func bar(float,float)->float;//Void return types are optional
+
+//This needs to either detect cyclic reference or just expect forward declarations
+export struct S{int a;int b;};
+...
+
+results in a file like this:
+Header:
+
+#include <Module.hpp>
+namespace MODULE_NAME
+{
+ int64_t foo(int64_t,int64_t);
+ double(*bar)(double,double);//Either gets mapped to a wrapper or direct function
+ struct __attribute__(__packed__) S{int64 a; int64_t b;};
+ //Wrapper functions are not declared here, they are generated in the export functions using template magic. While probably not the best solution for compile time, this drastically simplifies the generator. If it ever becomes a problem it can easily be changed.
+}
+
+CPP:
+
+#include <HEADER>
+
+namespace MODULE_NAME
+{
+ Entry/Exit points
+}
+
+Implementation:
+
+#include <HEADER>
+
+namespace MODULE_NAME
+{
+ int64_t foo(int64_t a,int64_t b)
+ {
+  return a+b;
+ }
+}

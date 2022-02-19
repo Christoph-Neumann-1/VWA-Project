@@ -56,6 +56,7 @@ namespace vwa
             }
             case JumpFuncAbs:
             {
+            JumpFuncAbs:
                 uint64_t nArgs = *reinterpret_cast<const uint64_t *>((bc + 9));
                 memmove(stack.top - nArgs + 16, stack.top - nArgs, nArgs);
                 *reinterpret_cast<const uint8_t **>(stack.top - nArgs) = basePtr;
@@ -67,10 +68,21 @@ namespace vwa
             }
             case JumpFFI:
             {
+            JumpFFI:
                 Linker::FFIFunc func = *reinterpret_cast<const Linker::FFIFunc *>((bc + 1));
-                func(this, stack.top);
+                func(this);
                 bc += 17;
                 continue;
+            }
+            case JumpFPtr:
+            {
+                bool isFFI = *reinterpret_cast<const bool *>((bc + 1));
+                bc++;
+                //I know,goto bad and all that, but this is the easiest way to do this.
+                if (isFFI)
+                    goto JumpFFI;
+                else
+                    goto JumpFuncAbs;
             }
             case Return:
             {

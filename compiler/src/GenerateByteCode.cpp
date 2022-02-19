@@ -250,6 +250,7 @@ namespace vwa
                 bc.push_back({bc::Pop});
                 pushToBc(bc, uint64_t{scope.size});
             }
+            scopes.pop_back();
             return res;
         }
         case Node::Type::Plus:
@@ -257,7 +258,21 @@ namespace vwa
             auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
             auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
+            NodeResult ret;
+            if (!lhs.pointerDepth && !rhs.pointerDepth)
+                ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
+            else if (lhs.pointerDepth)
+                if (rhs.pointerDepth)
+                    throw std::runtime_error("Cannot add pointers");
+                else if (rhs.type == PrimitiveTypes::I64)
+                    ret = lhs;
+                else
+                    throw std::runtime_error("Cannot add pointers");
+            else if (rhs.pointerDepth)
+                if (lhs.type == PrimitiveTypes::I64)
+                    ret = rhs;
+                else
+                    throw std::runtime_error("Cannot add pointers");
             switch (ret.type)
             {
             case PrimitiveTypes::I64:
@@ -402,29 +417,41 @@ namespace vwa
         }
         case Node::Type::Assign:
         {
+            auto expr = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
             auto &what = node->children[0];
-            if (what.type != Node::Type::Variable)
+            NodeResult rt;
+            if (what.type == Node::Type::Dereference)
+            {
+                rt = compileNode(module, cache, &what.children[0], fRetT, constPool, bc, scopes, log);
+                bc.push_back({bc::WriteAbs});
+            }
+            else if (what.type == Node::Type::Variable)
+            {
+                bc.push_back({bc::WriteRel});
+                auto &name = std::get<std::string>(what.value);
+                for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                {
+                    auto it2 = it->variables.find(name);
+                    if (it2 != it->variables.end())
+                    {
+                        rt.type = it2->second.type;
+                        rt.pointerDepth = it2->second.pointerDepth;
+                        pushToBc<intptr_t>(bc, it2->second.offset);
+                    }
+                }
+            }
+            else
             {
                 log << Logger::Error << "Cannot assign to non-variable yet\n";
                 throw std::runtime_error("Cannot assign to non-variable yet");
             }
-            auto expr = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto &name = std::get<std::string>(what.value);
-            for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
-            {
-                auto it2 = it->variables.find(name);
-                if (it2 != it->variables.end())
-                {
-                    if (auto instr = typeCast(it2->second.type, false, expr.type, expr.pointerDepth, log); instr)
-                        bc.push_back({*instr});
-                    bc.push_back({bc::WriteRel});
-                    pushToBc<intptr_t>(bc, it2->second.offset);
-                    pushToBc<uint64_t>(bc, getSizeOfType(it2->second.type, it2->second.pointerDepth, cache->structs));
-                    return {}; // TODO: consider changing this
-                }
-            }
-            log << Logger::Error << "Cannot find variable " << name << "\n";
-            throw std::runtime_error("Cannot find variable");
+            if (!rt.type)
+                throw std::runtime_error("Assignment failed");
+            if (auto instr = typeCast(rt.type, rt.pointerDepth, expr.type, expr.pointerDepth, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            pushToBc<uint64_t>(bc, getSizeOfType(rt.type, rt.pointerDepth, cache->structs));
+            return {};
         }
         case Node::Type::Variable:
         {
@@ -554,6 +581,15 @@ namespace vwa
             }
             pushToBc<uint64_t>(bc, argSize);
             return {func.returnType.type, func.returnType.pointerDepth};
+        }
+
+        case Node::Type::SizeOf:
+        {
+            auto t = std::get<Node::VarTypeCached>(node->value);
+            auto size = getSizeOfType(t.index, t.pointerDepth, cache->structs);
+            bc.push_back({bc::Push64});
+            pushToBc<int64_t>(bc, size);
+            return {PrimitiveTypes::I64, 0};
         }
         }
 

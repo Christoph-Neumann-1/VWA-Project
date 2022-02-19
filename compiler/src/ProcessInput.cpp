@@ -149,6 +149,7 @@ namespace vwa
         switch (node.type)
         {
         case Node::Type::Type:
+        case Node::Type::SizeOf:
         {
             auto &n = std::get<Node::VarType>(node.value);
             if (node.children.size() != 0)

@@ -485,6 +485,11 @@ namespace vwa
             }
             return result;
         }
+        case Token::Type::size_of:
+        {
+            auto type = parseType(tokens, ++pos);
+            return {Node::Type::SizeOf, {std::move(type)}, {}, tokens[pos].line};
+        }
         default:
             throw std::runtime_error("Unexpected token");
         }
