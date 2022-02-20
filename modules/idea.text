@@ -5,7 +5,7 @@ Syntax example:
 import std;
 
 export func foo(int,int)->int;
-//This is here to avoid importing every function, thereby impacting loading time
+//This is here to avoid importing every function, thereby impacting loading time. Wildcard imports will still be an option
 import func bar(float,float)->float;//Void return types are optional
 
 //This needs to either detect cyclic reference or just expect forward declarations

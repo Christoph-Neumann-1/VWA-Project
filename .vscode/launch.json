@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                "testfile"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "name": "Launch main app",
             "type": "cppdbg",
             "request": "launch",

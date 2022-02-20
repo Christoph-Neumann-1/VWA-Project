@@ -2,16 +2,10 @@
 
 namespace vwa
 {
-    std::string Preprocessor::process(std::string input)
+
+    Preprocessor::File Preprocessor::process(std::istream &input)
     {
-        file = std::move(input);
-        current = 0;
-        vars.clear();
-        for (auto &var : options.defines)
-        {
-            vars.emplace(var.first, var.second);
-        }
-        std::replace(file.begin(), file.end(), '\n', ' ');
-        return std::move(file);
+        File f{input};
+        return f;
     }
 }

@@ -5,6 +5,7 @@
 #include <optional>
 #include <unordered_map>
 #include <Log.hpp>
+#include <Preprocessor.hpp>
 
 namespace vwa
 {
@@ -102,5 +103,6 @@ namespace vwa
         {"func", Token::Type::func_},
     };
 
-    std::optional<std::vector<Token>> tokenize(const std::string &input, Logger &log);
+    // The reference is not const because I can't be bothered to implement a const_iterator
+    std::optional<std::vector<Token>> tokenize(Preprocessor::File &input, Logger &log);
 }

@@ -15,8 +15,10 @@ namespace vwa
         }
     };
 
-    static std::optional<Token> parseNumber(const std::string &str, size_t &begin)
+    static std::optional<Token> parseNumber(Preprocessor::File::charIterator &it)
     {
+        auto &str = it.it->str;
+        auto &begin = it.pos;
         size_t firstNonDigit = str.size();
         bool dotFound = false;
         for (size_t i = begin; i < str.size(); i++)
@@ -81,16 +83,20 @@ namespace vwa
         }
     }
 
-    std::optional<std::vector<Token>> tokenize(const std::string &input, Logger &log)
+    std::optional<std::vector<Token>> tokenize(Preprocessor::File &input, Logger &log)
     {
         log << Logger::Info << "Beginning tokenization\n";
         log << Logger::Warning << "Missing logs for tokenization\n";
-        size_t current = 0;
-        uint64_t lineCounter = 1;
+        Preprocessor::File::charIterator it = input.begin();
         std::vector<Token> tokens;
         while (1)
         {
-            switch (input[current])
+            if (it.it == input.end())
+            {
+                tokens.push_back({Token::Type::eof});
+                return tokens;
+            }
+            switch (*it)
             {
             case '\0':
                 tokens.push_back(Token{Token::Type::eof, {}});
@@ -98,11 +104,9 @@ namespace vwa
             case '\r':
                 throw WindowsException();
             case '\n':
-                ++lineCounter;
-                [[fallthrough]];
             case ' ':
             case '\t':
-                ++current;
+                ++it;
                 continue;
 #pragma region brackets
             case '(':
@@ -135,7 +139,7 @@ namespace vwa
                 tokens.push_back({Token::Type::colon, {}});
                 break;
             case '.':
-                if (!std::isdigit(input[current + 1]))
+                if (!std::isdigit(*(it + 1)))
                 {
                     tokens.push_back({Token::Type::dot, {}});
                     break;
@@ -152,21 +156,21 @@ namespace vwa
             case '8':
             case '9':
             {
-                if (auto ret = parseNumber(input, current); ret)
+                if (auto ret = parseNumber(it); ret)
                     tokens.emplace_back(ret.value());
                 else
                 {
-                    printf("Error: Unknown number at line %lu.\n", lineCounter);
+                    printf("Error: Unknown number at line %i.\n", it.it->line);
                     return {};
                 }
             }
             break;
             case '-':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                 case '>':
                     tokens.push_back({Token::Type::arrow_, {}});
-                    ++current;
+                    ++it;
                     break;
                 default:
                     tokens.push_back({Token::Type::minus, {}});
@@ -177,12 +181,12 @@ namespace vwa
                 tokens.push_back({Token::Type::plus, {}});
                 break;
             case '*':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                     {
                     case '*':
                         tokens.push_back({Token::Type::double_asterix, {}});
-                        ++current;
+                        ++it;
                         break;
                     default:
                         tokens.push_back({Token::Type::asterix, {}});
@@ -197,12 +201,12 @@ namespace vwa
                 tokens.push_back({Token::Type::modulo, {}});
                 break;
             case '&':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                     {
                     case '&':
                         tokens.push_back({Token::Type::double_ampersand, {}});
-                        ++current;
+                        ++it;
                         break;
                     default:
                         tokens.push_back({Token::Type::ampersand, {}});
@@ -211,12 +215,12 @@ namespace vwa
                 }
                 break;
             case '!':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                     {
                     case '=':
                         tokens.push_back({Token::Type::neq, {}});
-                        ++current;
+                        ++it;
                         break;
                     default:
                         tokens.push_back({Token::Type::exclamation, {}});
@@ -225,23 +229,23 @@ namespace vwa
                 }
                 break;
             case '|':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                 case '|':
                     tokens.push_back({Token::Type::double_pipe, {}});
-                    ++current;
+                    ++it;
                     break;
                 default:
-                    printf("Tokenizing failed at line %lu. Reason: expected '|' but got '%c'\n", lineCounter, input[current]);
+                    printf("Tokenizing failed at line %i. Reason: expected '|' but got '%c'\n", it.it->line, *it);
                     return {};
                 }
                 break;
             case '=':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                 case '=':
                     tokens.push_back({Token::Type::eq, {}});
-                    ++current;
+                    ++it;
                     break;
                 default:
                     tokens.push_back({Token::Type::assign, {}});
@@ -249,11 +253,11 @@ namespace vwa
                 }
                 break;
             case '>':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                 case '=':
                     tokens.push_back({Token::Type::gte, {}});
-                    ++current;
+                    ++it;
                     break;
                 default:
                     tokens.push_back({Token::Type::gt, {}});
@@ -261,11 +265,11 @@ namespace vwa
                 }
                 break;
             case '<':
-                switch (input[current + 1])
+                switch (*(it + 1))
                 {
                 case '=':
                     tokens.push_back({Token::Type::lte, {}});
-                    ++current;
+                    ++it;
                     break;
                 default:
                     tokens.push_back({Token::Type::lt, {}});
@@ -275,75 +279,82 @@ namespace vwa
 #pragma endregion operators
             case '"':
             {
+                auto &current = it.pos;
                 auto begin = current + 1;
-                // I am aware this allows for multi line strings. This is a feature, not a bug.
-                while (input[current + 1] != '"' && input[current] != '\\')
-                    ++current;
+                // Multi line strings may be supported in the future
+                while (*(it + 1) != '"' && *it != '\\')
+                    ++it;
                 std::string str;
                 str.reserve(current - begin + 1);
                 for (auto i = begin; i <= current; ++i)
                 {
-                    switch (input[i])
+                    switch (it.it->str[i])
                     {
                     case '\\':
-                        if (auto escaped = handleEscapedChar(input[++i]); escaped)
+                        if (auto escaped = handleEscapedChar(it.it->str[++i]); escaped)
                         {
                             str += escaped.value();
                             break;
                         }
-                        printf("Tokenizing failed at line %lu. Reason: unknown escape sequence '\\%c'\n", lineCounter, input[i]);
+                        printf("Tokenizing failed at line %i. Reason: unknown escape sequence '\\%c'\n", it.it->line, it.it->str[i]);
                         return {};
                     default:
-                        str += input[i];
+                        str += it.it->str[i];
                         break;
                     }
                 }
                 str.shrink_to_fit();
                 tokens.push_back({Token::Type::string_literal, std::move(str)});
-                ++current;
+                ++it;
             }
             break;
             case '\'':
-                if (input.length() <= current + 2)
-                    printf("Tokenizing failed at line %lu. Reason: reached end of file", lineCounter);
-                switch (input[current + 1])
+                if (it.it->str.length() <= it.pos + 2)
+                    printf("Tokenizing failed at line %i. Reason: reached end of file", it.it->line);
+                switch (*(it + 1))
                 {
                 case '\\':
-                    if (input.length() <= current + 3)
+                    if (it.it->str.length() <= it.pos + 3)
                     {
-                        printf("Tokenizing failed at line %lu. Reason: reached end of file", lineCounter);
+                        printf("Tokenizing failed at line %i. Reason: reached end of file", it.it->line);
                     }
 
-                    if (auto escaped = handleEscapedChar(input[current + 2]); escaped)
+                    if (auto escaped = handleEscapedChar(*(it + 2)); escaped)
                     {
                         tokens.push_back({Token::Type::int_literal, int64_t{escaped.value()}});
-                        current += 3;
+                        it += 3;
                     }
-                    printf("Tokenizing failed at line %lu. Reason: unknown escape sequence '\\%c'\n", lineCounter, input[current + 2]);
+                    printf("Tokenizing failed at line %i. Reason: unknown escape sequence '\\%c'\n", it.it->line, *(it + 2));
                     return {};
                     break;
                 default:
-                    tokens.push_back({Token::Type::int_literal, input[current + 1]});
-                    current += 2;
+                    tokens.push_back({Token::Type::int_literal, static_cast<int64_t>(*(it + 1))});
+                    it += 2;
                     break;
                 }
-                if (input[current] != '\'')
+                if (*it != '\'')
                 {
-                    printf("Tokenizing failed at line %lu. Reason: expected '\'' but got '%c'. Unclosed character literal\n", lineCounter, input[current]);
+                    printf("Tokenizing failed at line %i. Reason: expected '\'' but got '%c'. Unclosed character literal\n", it.it->line, *it);
                     return {};
                 }
                 break;
             default:
             {
-                auto begin = current;
-                if (input[begin] != '_' && !isalpha(input[begin]))
+                auto begin = it.pos;
+                auto current = it.pos;
+                if (*it != '_' && !isalpha(*it))
                 {
-                    printf("Tokenizing failed at line %lu. Reason: expected identifier but got '%c'\n", lineCounter, input[begin]);
+                    printf("Tokenizing failed at line %i. Reason: expected identifier but got '%c'\n", it.it->line, it.it->str[current]);
                     return {};
                 }
-                while (isalnum(input[current]) || input[current] == '_')
+                while (isalnum(it.it->str[current]) || it.it->str[current] == '_')
                     ++current;
-                auto str = input.substr(begin, current - begin);
+                if (begin == current)
+                {
+                    printf("Tokenizing failed at line %i.Nothing found\n", it.it->line);
+                    return {};
+                }
+                auto str = it.it->str.substr(begin, current - begin);
                 if (auto i = reservedIdentifiers.find(str); i != reservedIdentifiers.end())
                     tokens.push_back({i->second, {}});
                 else
@@ -355,11 +366,11 @@ namespace vwa
                     else
                         tokens.push_back({Token::Type::id, std::move(str)});
                 }
-                --current;
+                it.pos = current - 1;
             }
             }
-            tokens.back().line = lineCounter;
-            ++current;
+            tokens.back().line = it.it->line;
+            ++it;
         }
     }
 
@@ -441,5 +452,4 @@ namespace vwa
         }
         }
     }
-
 }

@@ -18,33 +18,36 @@ int main(int argc, char **argv)
     std::string fileName;
     uint loglvl = 3;
     bool emitTree = false;
+    bool PreprocessorOnly = false;
 
     CLI::App app{"VWA Programming language"};
     app.add_option("-f,--file, file", fileName, "Input file")->required()->check(CLI::ExistingFile); // TODO: support for multiple files
     app.add_option("-l,--log-level", loglvl, "Verbosity of the output (0-3)")->check(CLI::Range(0, 3));
     app.add_flag("-t,--tree", emitTree, "Emit the AST tree");
+    app.add_flag("-p,--preprocessor", PreprocessorOnly, "Only preprocess the input file");
     CLI11_PARSE(app, argc, argv);
-    FILE *f = fopen(fileName.c_str(), "r");
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET); /* same as rewind(f); */
 
-    std::string content;
-    content.resize(fsize);
-    fread(content.data(), fsize, 1, f);
-    fclose(f);
+    std::ifstream input(fileName);
 
     Logger log;
     log.setStream(Logger::LogLevel::Error, &std::cerr);
     for (uint i = 1; i <= loglvl; i++)
         log.setStream(static_cast<Logger::LogLevel>(i), &std::cout);
     log << Logger::Info << "General Setup completed, beginning compilation\n";
-    // Preprocessor preprocessor({});
-    // content = preprocessor.process(std::move(content));
-    auto tokens = tokenize(content, log);
+    Preprocessor preprocessor({});
+    // TODO: flag to skip preprocessing.
+    auto processed = preprocessor.process(input);
+    if (PreprocessorOnly || true)
+    {
+        log << Logger::Info << "Preprocessing completed, exiting\n";
+        std::ofstream out("out.vwa");
+        out << processed.toString();
+        // return 0;
+    }
+    auto tokens = tokenize(processed, log);
     if (!tokens)
     {
-        log << Logger::Error << "Failed to tokenize file" << fileName;
+        log << Logger::Error << "Failed to tokenize file " << fileName;
         return 1; // TODO: error codes and logger
     }
 

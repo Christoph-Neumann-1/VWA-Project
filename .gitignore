@@ -5,3 +5,4 @@ perf.data*
 **/bin
 callgrind.out.*
 *.mod
+out.vwa
