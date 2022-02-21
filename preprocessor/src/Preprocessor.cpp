@@ -20,6 +20,26 @@ namespace vwa
                     file.erase(current.it + 1);
                     continue;
                 }
+            case '#':
+            {
+                char next = current.pos + 1 == current.it->str.length() ? '\0' : *(current + 1);
+                switch (next)
+                {
+                case ' ':
+                case '\t':
+                case '\0':
+                    // TODO: should I allow multi line comments?
+                    if (current.pos)
+                    {
+                        current.it->str.erase(current.it->str.begin() + current.pos, current.it->str.end());
+                        ++current.it;
+                        current.pos = 0;
+                        continue;
+                    }
+                    current.it = file.erase(current.it);
+                    current.pos = 0;
+                }
+            }
             }
             ++current;
         }

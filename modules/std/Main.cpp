@@ -25,37 +25,33 @@ namespace vwa
         struct Offset<prev, void>
         {
             template <size_t idx>
-            static void get(uint8_t *){};
+            static void get(uint8_t *) { throw std::runtime_error("This should not be possible"); }
         };
         template <size_t prev, typename T, typename... Args2>
         struct Offset
         {
             static constexpr size_t offset = prev;
-            using next = Offset<offset + sizeof(T), Args2...>;
+            using next = Offset<prev + sizeof(T), Args2...>;
             // I still don't know where this terminates
             using type = T;
-            static T read(uint8_t *start)
-            {
-                return *reinterpret_cast<T *>(start + offset);
-            }
             // TODO: use requires to constrain this
-            template <size_t idx, typename next, typename>
+            template <size_t idx, typename current>
             struct Get
             {
-                static constexpr auto value = Get<idx - 1, typename next::next, typename next::type>::value;
-                using type = typename next::template Get<idx - 1, typename next::next, typename next::type>::type;
+                static constexpr auto value = Get<idx - 1, typename current::next>::value;
+                using type = typename next::template Get<idx - 1, typename current::next>::type;
             };
-            template <typename next, typename U>
-            struct Get<0, next, U>
+            template <typename current>
+            struct Get<0, current>
             {
-                static constexpr auto value = offset;
-                using type = U;
+                static constexpr auto value = current::offset;
+                using type = current::type;
             };
 
             template <size_t idx>
             static auto get(uint8_t *start)
             {
-                using T2 = Get<idx, next, T>;
+                using T2 = Get<idx, Offset<prev, T, Args2...>>;
                 return *reinterpret_cast<typename T2::type *>(start + T2::value);
             }
         };
@@ -80,13 +76,13 @@ namespace vwa
             vm->stack.push(expand(vm->stack.top, typename reader::sequence{}));
     }
 
-    //TODO: pointers(maybe return string and keeps appending to it)
+    // TODO: pointers(maybe return string and keeps appending to it)
     template <typename T>
     constexpr std::string_view getTypeName()
     {
         if constexpr (std::is_pointer_v<T>)
         {
-            //TODO
+            // TODO
         }
         return T::typeName;
     }
@@ -111,17 +107,27 @@ namespace vwa
     {
         return "double";
     }
-    //TODO: auto cast
+    template <typename T, size_t S = 0>
+    struct getPointerLvl
+    {
+        static constexpr size_t value = S;
+        static constexpr std::string_view typeName = getTypeName<T>();
+    };
+    template <typename T, size_t S>
+    struct getPointerLvl<T *, S> : getPointerLvl<T, S + 1>
+    {
+    };
+    // TODO: auto cast
     template <typename Ret, typename... Args>
     std::pair<std::vector<Linker::Module::Symbol::Function::Parameter>, Linker::Module::Symbol::Function::Parameter> generateSignature(Ret (*f)(Args...))
     {
-        std::vector<Linker::Module::Symbol::Function::Parameter> params{{std::string{getTypeName<Args>()}, 0}...};
-        return {params, {std::string{getTypeName<Ret>()}, 0}};
+        std::vector<Linker::Module::Symbol::Function::Parameter> params{{std::string{getPointerLvl<Args>::typeName}, getPointerLvl<Args>::value}...};
+        return {params, {std::string{getPointerLvl<Ret>::typeName}, getPointerLvl<Ret>::value}};
     }
 }
 
-//Exporting Structs sucks because c++ lacks reflection, so I recommend including an additional file with the sole purpose of declaring structs in the language.
-//These structs can then be included from here
+// Exporting Structs sucks because c++ lacks reflection, so I recommend including an additional file with the sole purpose of declaring structs in the language.
+// These structs can then be included from here
 
 #define IMPORT_FUNC(type, name)                  \
     namespace                                    \
@@ -171,6 +177,23 @@ int64_t readChar()
 {
     return std::getchar();
 }
+
+// Returns an array of bytes each containing a single bit. This is a stop gap solution till I implement bitwise operators
+char *getBits(void *ptr, int64_t size)
+{
+    char *bits = reinterpret_cast<char *>(malloc(size * 8));
+    for (int64_t i = 0; i < size; i++)
+    {
+        for (int64_t j = 0; j < 8; j++)
+        {
+            bits[i * 8 + j] = ((reinterpret_cast<uint8_t *>(ptr)[i] >> j) & 1);
+        }
+    }
+    return bits;
+}
+
+ExportFunction(getBits);
+ExportFunction(free);
 
 void printChar(int64_t c)
 {

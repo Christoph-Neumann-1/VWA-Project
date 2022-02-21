@@ -17,6 +17,7 @@ namespace vwa
         using namespace bc;
         for (;;)
         {
+            // TODO: instruction for ptr to int64_t
             switch (bc->instruction)
             {
             case CallFunc:
@@ -78,7 +79,7 @@ namespace vwa
             {
                 bool isFFI = *reinterpret_cast<const bool *>((bc + 1));
                 bc++;
-                //I know,goto bad and all that, but this is the easiest way to do this.
+                // I know,goto bad and all that, but this is the easiest way to do this.
                 if (isFFI)
                     goto JumpFFI;
                 else

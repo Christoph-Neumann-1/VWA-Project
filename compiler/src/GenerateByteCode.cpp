@@ -125,7 +125,7 @@ namespace vwa
         }
         scopes.push_back(scope);
         funcData.address = bc.size();
-        funcData.finished = true; //Indicates that the adress is final.
+        funcData.finished = true; // Indicates that the adress is final.
         // TODO: store the offsets somewhere What was I thinking?
         // FIXME: consider all outcomes, like having a value at the end of a void function and such
         auto res = compileNode(module, cache, &func.body, NodeResult{funcData.returnType.type, funcData.returnType.pointerDepth}, constPool, bc, scopes, log);
@@ -265,12 +265,21 @@ namespace vwa
                 if (rhs.pointerDepth)
                     throw std::runtime_error("Cannot add pointers");
                 else if (rhs.type == PrimitiveTypes::I64)
+                {
                     ret = lhs;
+                    bc.push_back({bc::AddI});
+                    return ret;
+                }
                 else
                     throw std::runtime_error("Cannot add pointers");
             else if (rhs.pointerDepth)
                 if (lhs.type == PrimitiveTypes::I64)
+                {
                     ret = rhs;
+                    // TODO this is a horrible solution, I really need to find out if this is a safe thing to do
+                    bc.push_back({bc::AddI});
+                    return ret;
+                }
                 else
                     throw std::runtime_error("Cannot add pointers");
             switch (ret.type)
@@ -407,7 +416,7 @@ namespace vwa
                 auto &name = std::get<std::string>(node->children[0].value);
                 auto it = scopes.back().variables.find(name);
                 auto init = compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
-                if (auto instr = typeCast(it->second.type, false, init.type, init.pointerDepth, log); instr)
+                if (auto instr = typeCast(it->second.type, it->second.pointerDepth, init.type, init.pointerDepth, log); instr)
                     bc.push_back({*instr});
                 bc.push_back({bc::WriteRel});
                 pushToBc<intptr_t>(bc, it->second.offset);
@@ -464,7 +473,7 @@ namespace vwa
                     bc.push_back({bc::ReadRel});
                     pushToBc<intptr_t>(bc, it2->second.offset);
                     pushToBc<uint64_t>(bc, getSizeOfType(it2->second.type, it2->second.pointerDepth, cache->structs));
-                    return {it2->second.type};
+                    return {it2->second.type, it2->second.pointerDepth};
                 }
             }
             log << Logger::Error << "Variable " << name << " not found\n";
@@ -536,7 +545,7 @@ namespace vwa
         }
         case Node::Type::CallFunc:
         {
-            //No support for function pointers yet
+            // No support for function pointers yet
             auto &name = std::get<std::string>(node->children[0].value);
             auto it = cache->map.find(name);
             if (it == cache->map.end())
@@ -577,7 +586,7 @@ namespace vwa
             else
             {
                 bc.push_back({bc::CallFunc});
-                pushToBc<uint64_t>(bc, it->second.first); //Gets replaced by adress or more permanent index later}
+                pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
             }
             pushToBc<uint64_t>(bc, argSize);
             return {func.returnType.type, func.returnType.pointerDepth};
