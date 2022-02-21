@@ -1,7 +1,6 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <variant>
 #include <filesystem>
 #include <unordered_map>
 // I will figure this out later
@@ -13,7 +12,7 @@ namespace vwa
         struct Options
         {
             std::vector<std::filesystem::path> searchPath;
-            std::vector<std::pair<std::string, std::variant<int_least32_t, std::string>>> defines;
+            std::vector<std::pair<std::string, std::string>> defines; // TODO upate for use with file
             uint64_t maxExpansionDepth = 100;
         };
         Preprocessor(Options options_) : options(options_) {}
@@ -106,6 +105,11 @@ namespace vwa
                 }
                 iterator(Node *current_) : current(current_) {}
                 iterator(const iterator &old) : current(old.current) {}
+                iterator &operator=(const iterator &old)
+                {
+                    this->current = old.current;
+                    return *this;
+                }
 
                 bool operator==(const iterator other) const { return current == other.current; }
                 bool operator!=(const iterator other) const { return current != other.current; }
@@ -207,7 +211,7 @@ namespace vwa
                 {
                     append(line);
                 }
-                        }
+            }
             File(File &&other)
             {
                 head = std::move(other.head);
@@ -221,8 +225,6 @@ namespace vwa
                 other.m_end = nullptr;
                 return *this;
             }
-            File(const File &) = delete;
-            File &operator=(const File &) = delete;
             File() {}
 
             iterator begin() { return iterator(head.get()); }
@@ -235,7 +237,8 @@ namespace vwa
                     ret += begin++;
                 return ret;
             }
-            // Inserts a node after pos
+            // TODO: copy constructor for file and node
+            //  Inserts a node after pos
             void insertAfter(iterator pos, iterator node)
             {
                 if (!pos->next)
@@ -279,17 +282,28 @@ namespace vwa
                     insertBefore(pos, begin++);
             }
 
-            void erase(iterator pos)
+            iterator erase(iterator pos)
             {
+                if (pos.get() == m_end)
+                    return m_end;
+                iterator ret{pos + 1};
+                pos->next->prev = pos->prev;
+                if (pos->prev)
+                    pos->prev->next = std::move(pos->next);
+                else
+                    head = std::move(pos->next);
+                return ret;
             }
-            void erase(iterator begin, iterator end) {}
+            iterator erase(iterator begin, iterator end)
+            {
+                while (begin != end)
+                    begin = erase(begin);
+                return begin;
+            }
         };
         File process(std::istream &input);
 
     private:
         const Options options;
-        uint current;
-        std::string file;
-        std::unordered_map<std::string, std::variant<int32_t, std::string>> vars;
     };
 }

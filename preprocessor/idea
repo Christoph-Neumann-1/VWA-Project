@@ -1,0 +1,85 @@
+Preprocessor runs  in one pass.
+
+Comments:
+# followed by a space. comments everything on the line
+TODO: figure out a better way to handle escape sequences
+It matches special characters(#) and \ and then modifies the input
+Macros are defined in one of two ways:
+#define A B
+or 
+#macro A
+B
+#endmacro 
+
+The macros above are equivalent. 
+
+Macros may take arguments like this:
+#macro A
+#0#1 
+#endmacro A
+A # followed by a number refers to a argument. If none was provided it is ignored
+
+Expanding macros
+
+#A or with args: #B(a,b)
+
+Valid macro names start with a letter followed by more letters, underscores ore numbers. Some are reserved as keywords. The space following a macro invokation is removed.
+#A #B will concatonate the two values
+
+If you are done with a macro you may use #undef to remove it
+
+There are commands to perform simple math
+#+ a b c
+ -
+ /
+ *
+ %
+ >
+ >=
+ <
+ <=
+ =
+ !=
+ &
+ |
+ !
+Takes values in the variable a and b and stores it in c
+Numbers are allowed to
+
+
+Escaping the character '\' escapes the next character and skips processing of said character.
+
+Expansion of macro arguments
+By default macro arguments are passed as is
+e.g. #A(a) passes the letter a as an argument 
+The same goes for many other commands. Some, like math will automatically expand variables. This is desirable because it reduces the possiblity of a macro expansion introducing whitespaces and messing things up.
+If you wish to expand an argument you need to wrap it in #
+e.g #A(#a#) expands a. This is used to make sure expanding one argument does not affect the others by introducing a closing bracket or , for example. 
+You can still concatonate macros just fine. #a##b# 
+This syntax is also allowed for other macros, but whitespaces look prettier. 
+
+Escaping newlines:
+adding '\' before a newline removes the newline
+
+Here is a list of special keywords
+#include(file) pastes file contents at position.
+#define A WHAT Shorthand for 
+#macro NAME
+
+#endmacro NAME
+#undef deletes a macro
+
+See above for math ops
+
+#warning MESSAGE
+#error MESSAGE //Also terminates the program
+
+conditions:
+#if A MATH_OPERATOR B//Doesn't support multiple comparisons like A = B or A=C
+But does allow passing a name to see if it is defined.
+#if A
+
+if always requires endif
+
+#endif
+There is no else.
