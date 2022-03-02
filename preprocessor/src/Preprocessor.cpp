@@ -3,6 +3,16 @@
 namespace vwa
 {
 
+    enum class EscapeType
+    {
+        File,        // Top level
+        MacroInvoke, //#A() for example
+    };
+
+    void handleEscape(Preprocessor::File::charIterator &it, EscapeType type, Preprocessor::File &file)
+    {
+    }
+
     Preprocessor::File Preprocessor::process(std::istream &input)
     {
         File file = File{input};

@@ -193,6 +193,11 @@ char *getBits(void *ptr, int64_t size)
 }
 
 ExportFunction(getBits);
+void *m_malloc(int64_t size)
+{
+    return malloc(size);
+}
+ExportFunctionAs(m_malloc, malloc);
 ExportFunction(free);
 
 void printChar(int64_t c)

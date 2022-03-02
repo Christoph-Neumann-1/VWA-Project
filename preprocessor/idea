@@ -83,3 +83,12 @@ if always requires endif
 
 #endif
 There is no else.
+
+Ideas for escape sequences:
+\ before newline see above
+\# ignore command
+When processing macros, allow escaping all special chars e.g.
+#A(\,) for passing , as an argument the same goes for parentheses.
+\\ turns to \ only if the following character can be escaped
+#(\\,a) escapes the \
+\\ #a leaves the \\ since it is not necessary for escaping

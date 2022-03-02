@@ -68,7 +68,10 @@ namespace vwa
                 {
                     struct Field
                     {
-                        std::string type;
+                        // This should really not be here, but I don't intend to
+                        // change the rest of the code anytime soon, so it is here to stay.
+                        std::variant<std::string, size_t> type;
+                        std::string name;
                         uint64_t pointerDepth;
                         bool mutable_;
                     };
@@ -85,10 +88,10 @@ namespace vwa
             std::vector<std::string> importedModules;
             std::vector<std::string> exportedImports;
 
-            std::unordered_map<std::string, const Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
+            std::unordered_map<std::string, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
 
             // In theory it would be enough to just store the function names, but this way I can also make sure that the defintions are still the same at runtime.
-            std::vector<std::variant<Symbol, const Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.
+            std::vector<std::variant<Symbol, Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.
 
             void satisfyDependencies(Linker &linker);
 
@@ -103,7 +106,7 @@ namespace vwa
 
         // This function either provides a reference to an in-memory module or loads a new one from disk. If it can't find the module it will throw a runtime error.
         // The function is only supposed to be called after providing in-memory modules, therefore it loads dependencies right away.
-        const Module &requireModule(std::string name);
+        Module &requireModule(std::string name);
 
         // Imports symbols from other modules. This is a seperate function since the compiler may need to provide multiple modules before this can succeed.
         void satisfyDependencies();

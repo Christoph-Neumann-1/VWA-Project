@@ -1,0 +1,18 @@
+//Structs will be forward declared for pointer usage, but if you wish to have
+//nested structs then it is your responisibility to define them in the correct order
+
+export struct Vec2{
+    x:float,
+    y:float
+}
+
+export func m_malloc(int)->void* as malloc
+export func m_free(void*) as free
+
+//Should I allow this too? and should a module prefix be required? do i put everything in 
+//the same namespace?
+import func foo as bar
+
+import "std" or import module "std"
+
+export import ? or export ?

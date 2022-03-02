@@ -48,8 +48,8 @@ namespace vwa
         };
         size_t size = -1;
         std::vector<Member> members{};
-        size_t refCount = 0;                     // This is used to remove dependencies on structs which are not actually used in the module.
-        const Linker::Module::Symbol *symbol{0}; // Used if the name or type of the struct needs to be retrieved again, like for error reporting.
+        size_t refCount = 0;               // This is used to remove dependencies on structs which are not actually used in the module.
+        Linker::Module::Symbol *symbol{0}; // Used if the name or type of the struct needs to be retrieved again, like for error reporting.
         bool internal : 1;
         enum State
         {
@@ -71,7 +71,7 @@ namespace vwa
         // I did not want to waste addtional space on loop detection, so I just repurposed the unused space in booleans
         std::vector<Parameter> args{};
         Parameter returnType{};
-        uint64_t refCount = 0; //TODO: implement
+        uint64_t refCount = 0; // TODO: implement
         const Linker::Module::Symbol *symbol{0};
         union
         {
@@ -79,7 +79,7 @@ namespace vwa
             int64_t address; // After completely compiling this function the address is stored here.
         };
         bool internal;
-        bool finished = false; //TODO: set for ffi
+        bool finished = false; // TODO: set for ffi
     };
 
     struct Cache

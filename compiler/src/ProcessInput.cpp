@@ -52,15 +52,15 @@ namespace vwa
         struc.state = CachedStruct::Processing;
         for (auto &member : std::get<Linker::Module::Symbol::Struct>(struc.symbol->data).fields)
         {
-            auto type = typeFromString(member.type, structs);
-            struc.members.push_back({struc.size, type, member.pointerDepth});
-            if (type < numReservedIndices)
+            member.type = typeFromString(std::get<0>(member.type), structs);
+            struc.members.push_back({struc.size, std::get<1>(member.type), member.pointerDepth});
+            if (std::get<1>(member.type) < numReservedIndices)
             {
                 // We can't use this function for structs,since it is unknown whether their size has been calculated yet
-                struc.size += getSizeOfType(type, 0, structs);
+                struc.size += getSizeOfType(std::get<1>(member.type), 0, structs);
                 continue;
             }
-            auto &mem = getStructInfo(structs[type - numReservedIndices], structs);
+            auto &mem = getStructInfo(structs[std::get<1>(member.type) - numReservedIndices], structs);
             struc.size += mem.size;
         }
         struc.state = CachedStruct::Finished;
@@ -77,7 +77,7 @@ namespace vwa
         }
     }
 
-    Cache generateCache(const ProcessingResult &result, Logger &log)
+    Cache generateCache(ProcessingResult &result, Logger &log)
     {
         // TODO: I need to make this more efficient, linear search through the entire list of structs is horrible.
         Cache cache;
@@ -182,7 +182,7 @@ namespace vwa
 
     // TODO: deduplicate constant pool:
 
-    void compileMod(const ProcessingResult &source, Pass1Result &pass1, Logger &log)
+    void compileMod(ProcessingResult &source, Pass1Result &pass1, Logger &log)
     {
         log << Logger::Debug << "Generating cache...\n";
         auto cache = generateCache(source, log);
@@ -238,7 +238,7 @@ namespace vwa
             {
                 std::vector<Linker::Module::Symbol::Struct::Field> fields;
                 for (auto &field : struct_.fields)
-                    fields.push_back({field.type.name, field.type.pointerDepth, field.isMutable});
+                    fields.push_back({field.type.name, field.name, field.type.pointerDepth, field.isMutable});
                 Linker::Module::Symbol sym{struct_.name, Linker::Module::Symbol::Struct{std::move(fields)}};
                 if (struct_.exported)
                     module.exportedSymbols.push_back(sym);

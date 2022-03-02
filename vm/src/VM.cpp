@@ -2,7 +2,7 @@
 #include <Linker.hpp>
 #include <cstring>
 #include <cmath>
-
+// TODO: temporaries need not modify the stack pointer, remove that or add a second stack
 namespace vwa
 {
 
@@ -20,6 +20,8 @@ namespace vwa
             // TODO: instruction for ptr to int64_t
             switch (bc->instruction)
             {
+            case LastInstr:
+                return {LastInstr, ExitCode::HelperInstructionInCode};
             case CallFunc:
                 // TODO: find most efficient way to do this
                 return {CallFunc, ExitCode::HelperInstructionInCode};
@@ -166,6 +168,16 @@ namespace vwa
                 bc += 17;
                 continue;
             }
+            case ReadMember:
+            {
+                uint64_t ssize = *reinterpret_cast<const uint64_t *>((bc + 1));
+                uint64_t offset = *reinterpret_cast<const uint64_t *>((bc + 9));
+                uint64_t size = *reinterpret_cast<const uint64_t *>((bc + 17));
+                std::memmove(stack.top - ssize, stack.top - ssize + offset, size);
+                stack.top -= ssize - size;
+                bc += 25;
+                continue;
+            };
             case AbsOf:
                 stack.push<uint64_t>(reinterpret_cast<intptr_t>(basePtr) + *reinterpret_cast<const uint64_t *>((bc + 1)));
                 bc += 9;

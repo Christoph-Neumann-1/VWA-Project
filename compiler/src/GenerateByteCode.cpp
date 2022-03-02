@@ -600,6 +600,48 @@ namespace vwa
             pushToBc<int64_t>(bc, size);
             return {PrimitiveTypes::I64, 0};
         }
+        case Node::Type::MemberAccess:
+        {
+            auto &root = node->children[0];
+            int64_t offset = 0;
+            auto rootRes = compileNode(module, cache, &root, fRetT, constPool, bc, scopes, log);
+            auto rootRes2 = rootRes;
+            for (uint i = 1; i < node->children.size(); ++i)
+            {
+                if (rootRes.pointerDepth)
+                {
+                    log << "Cannot use operator . on a pointer\n";
+                    throw std::runtime_error("Cannot use operator . on a pointer");
+                }
+                auto &child = node->children[i];
+                if (child.type != Node::Type::Variable)
+                {
+                    throw std::runtime_error("Invalid node");
+                }
+                auto &name = std::get<std::string>(child.value);
+                auto &type = cache->structs[rootRes.type - numReservedIndices];
+                auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
+                auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
+                                          { return f.name == name; });
+                if (field == sym.fields.end())
+                {
+                    log << Logger::Error << "Field " << name << " not found in struct "
+                        << "\n";
+                    throw std::runtime_error("Field not found");
+                }
+                rootRes = {std::get<1>(field->type), field->pointerDepth};
+                if (i < node->children.size() - 1)
+                    offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
+            }
+            auto totalSize = getSizeOfType(rootRes2.type, rootRes2.pointerDepth, cache->structs);
+            auto resultSize = getSizeOfType(rootRes.type, rootRes.pointerDepth, cache->structs);
+            bc.push_back({bc::ReadMember});
+            pushToBc<uint64_t>(bc, totalSize);
+            pushToBc<uint64_t>(bc, offset);
+            pushToBc<uint64_t>(bc, resultSize);
+            return rootRes;
+            // TODO: reduce instruction count
+        }
         }
 
         log << Logger::Error << "Unhandled node type " << static_cast<int>(node->type) << "\n";

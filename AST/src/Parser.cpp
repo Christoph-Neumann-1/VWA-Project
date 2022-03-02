@@ -248,7 +248,7 @@ namespace vwa
         Node result{Node::Type::CallFunc, {}, {func}, func.line};
         if (tokens[pos].type != Token::Type::lparen)
             throw std::runtime_error("Expected ( after function call");
-        //FIXME: where am I handling commas?
+        // FIXME: where am I handling commas?
         for (++pos; tokens[pos].type != Token::Type::rparen;)
         {
             if (tokens[pos].type == Token::Type::eof)
@@ -495,6 +495,7 @@ namespace vwa
         }
     }
     // TODO: Check if it is faster to assume a variable first
+    // Function pointers require a rewrite. Calls should not be handled in here
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
     {
         Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};

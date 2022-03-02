@@ -22,7 +22,8 @@ namespace vwa
         return res.first->second;
     }
 
-    const Linker::Module &Linker::requireModule(std::string name)
+    // This too should be constant but whatever
+    Linker::Module &Linker::requireModule(std::string name)
     {
         auto it = modules.find(name);
         if (it == modules.end())
