@@ -153,6 +153,34 @@ namespace vwa
                     tmp += n;
                     return tmp;
                 }
+                charIterator operator--()
+                {
+                    if (pos == 0)
+                    {
+                        --it;
+                        pos = it->str.size() - 1;
+                    }
+                    return *this;
+                }
+                charIterator operator--(int)
+                {
+                    charIterator tmp = *this;
+                    --*this;
+                    return tmp;
+                }
+
+                charIterator &operator-=(uint n)
+                {
+                    while (n--)
+                        --*this;
+                    return *this;
+                }
+                charIterator operator-(uint n) const
+                {
+                    charIterator tmp = *this;
+                    tmp -= n;
+                    return tmp;
+                }
                 char operator*() const { return it->str[pos]; }
             };
 

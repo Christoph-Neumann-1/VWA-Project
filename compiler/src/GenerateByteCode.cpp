@@ -450,6 +450,50 @@ namespace vwa
                     }
                 }
             }
+            else if (what.type == Node::Type::MemberAccess)
+            {
+                auto &root = what.children[0];
+                auto &name = std::get<std::string>(root.value);
+                bc.push_back({bc::WriteRel});
+                for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                {
+                    if (rt.pointerDepth)
+                    {
+                        log << "Cannot use operator . on a pointer\n";
+                        throw std::runtime_error("Cannot use operator . on a pointer");
+                    }
+                    auto it2 = it->variables.find(name);
+                    if (it2 != it->variables.end())
+                    {
+                        size_t offset = it2->second.offset;
+                        rt.type = it2->second.type;
+                        for (uint i = 1; i < what.children.size(); ++i)
+                        {
+                            auto &child = what.children[i];
+                            if (child.type != Node::Type::Variable)
+                            {
+                                throw std::runtime_error("Invalid node");
+                            }
+                            auto &name = std::get<std::string>(child.value);
+                            //FIXME What happens when passing a primitive??
+                            auto &type = cache->structs[rt.type - numReservedIndices];
+                            auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
+                            auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
+                                                      { return f.name == name; });
+                            if (field == sym.fields.end())
+                            {
+                                log << Logger::Error << "Field " << name << " not found in struct "
+                                    << "\n";
+                                throw std::runtime_error("Field not found");
+                            }
+                            rt = {std::get<1>(field->type), field->pointerDepth};
+                            if (i < node->children.size() - 1)
+                                offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
+                        }
+                        pushToBc<intptr_t>(bc, offset);
+                    }
+                }
+            }
             else
             {
                 log << Logger::Error << "Cannot assign to non-variable yet\n";

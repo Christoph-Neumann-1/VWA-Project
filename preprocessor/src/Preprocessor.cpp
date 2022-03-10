@@ -32,12 +32,16 @@ namespace vwa
                 }
             case '#':
             {
-                char next = current.pos + 1 == current.it->str.length() ? '\0' : *(current + 1);
-                switch (next)
+                char prev = current.pos ? *(current - 1) : 0;
+                switch (prev)
                 {
-                case ' ':
-                case '\t':
-                case '\0':
+                case '\\':
+                {
+                    current.it->str.erase(current.it->str.begin() + current.pos - 1);
+                    current++ --; //To advance to the next line if the character was at the end
+                    continue;
+                }
+                default:
                     // TODO: should I allow multi line comments?
                     if (current.pos)
                     {
@@ -48,10 +52,11 @@ namespace vwa
                     }
                     current.it = file.erase(current.it);
                     current.pos = 0;
+                    continue;
                 }
             }
             }
-            ++current;
+            current++;
         }
 
         return file;

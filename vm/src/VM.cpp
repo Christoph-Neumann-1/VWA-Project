@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cmath>
 // TODO: temporaries need not modify the stack pointer, remove that or add a second stack
+// TODO: I should replace mmemove with a function of my own, since it is not the most efficient for this use case
 namespace vwa
 {
 
