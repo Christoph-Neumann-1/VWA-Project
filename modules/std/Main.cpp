@@ -121,8 +121,8 @@ namespace vwa
     template <typename Ret, typename... Args>
     std::pair<std::vector<Linker::Module::Symbol::Function::Parameter>, Linker::Module::Symbol::Function::Parameter> generateSignature(Ret (*f)(Args...))
     {
-        std::vector<Linker::Module::Symbol::Function::Parameter> params{{std::string{getPointerLvl<Args>::typeName}, getPointerLvl<Args>::value}...};
-        return {params, {std::string{getPointerLvl<Ret>::typeName}, getPointerLvl<Ret>::value}};
+        std::vector<Linker::Module::Symbol::Function::Parameter> params{{Identifier{std::string{getPointerLvl<Args>::typeName}}, getPointerLvl<Args>::value}...};
+        return {params, {Identifier{std::string{getPointerLvl<Ret>::typeName}}, getPointerLvl<Ret>::value}};
     }
 }
 
@@ -144,14 +144,14 @@ namespace vwa
 
 using namespace vwa;
 Linker::Module mod;
-#define ExportFunctionAs(f, name)                                                                                                                                                                                      \
-    namespace                                                                                                                                                                                                          \
-    {                                                                                                                                                                                                                  \
-        vwa::Autorun VWA_INTERNAL_UNIQUE_NAME(autorun){                                                                                                                                                                \
-            []() {                                                                                                                                                                                                     \
-                auto def = generateSignature(f);                                                                                                                                                                       \
-                mod.exportedSymbols.push_back({#name, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(f)}, std::move(def.first), std::move(def.second), false}}); \
-            }};                                                                                                                                                                                                        \
+#define ExportFunctionAs(f, name)                                                                                                                                                                                        \
+    namespace                                                                                                                                                                                                            \
+    {                                                                                                                                                                                                                    \
+        vwa::Autorun VWA_INTERNAL_UNIQUE_NAME(autorun){                                                                                                                                                                  \
+            []() {                                                                                                                                                                                                       \
+                auto def = generateSignature(f);                                                                                                                                                                         \
+                mod.exportedSymbols.push_back({{#name}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(f)}, std::move(def.first), std::move(def.second), false}}); \
+            }};                                                                                                                                                                                                          \
     }
 
 #define ExportFunction(f) ExportFunctionAs(f, f)
@@ -227,10 +227,9 @@ extern "C" Linker::Module *MODULE_LOAD()
 {
     // printf(ColorD("Debug:") ResetColor "Loading std library\n");
     // mod.exportedSymbols.push_back({"add", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = add}, {{"int", 0}, {"int", 0}}, {"int", 0}, false}});
-    mod.exportedSymbols.push_back({"sayHello", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = sayHello}, {}, {"void", 0}, false}});
-    mod.exportedSymbols.push_back({"intArray", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(intArray)}, {{"int", 0}}, {"int", 1}, false}});
-    mod.exportedSymbols.push_back({"delIntArray", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(delIntArray)}, {{"int", 1}}, {"void", 0}, false}});
-    fmt::print("Auto definition of readChar: {} {}", generateSignature(printChar).first.begin()->type, generateSignature(printChar).second.type);
+    mod.exportedSymbols.push_back({Identifier{"sayHello"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = sayHello}, {}, {{"void"}, 0}, false}});
+    mod.exportedSymbols.push_back({Identifier{"intArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(intArray)}, {{{"int"}, 0}}, {{"int"}, 1}, false}});
+    mod.exportedSymbols.push_back({Identifier{"delIntArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(delIntArray)}, {{{"int"}, 1}}, {{"void"}, 0}, false}});
     return &mod;
 }
 

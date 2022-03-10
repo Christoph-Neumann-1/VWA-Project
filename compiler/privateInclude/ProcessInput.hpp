@@ -89,7 +89,8 @@ namespace vwa
             Struct,
             Function,
         };
-        std::unordered_map<std::string, std::pair<size_t, Type>> map{};
+        // TODO: figure out if this is even necessery, or at least try to remove type from here.
+        std::unordered_map<Identifier, std::pair<size_t, Type>> map{};
         std::vector<CachedStruct> structs{};
         std::vector<CachedFunction> functions{};
     };

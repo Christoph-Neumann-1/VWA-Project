@@ -6,6 +6,7 @@
 #include <optional>
 #include <variant>
 #include <Bytecode.hpp>
+#include <Node.hpp>
 
 // TODO: consider memory mapping modules
 
@@ -26,12 +27,13 @@ namespace vwa
 
         struct Module
         {
+            std::string name;
             // TODO: make this more efficient
             std::variant<std::monostate, void *, std::vector<bc::BcToken>> data;
 
             struct Symbol
             {
-                std::string name;
+                Identifier name;
                 struct Function
                 {
                     enum Type
@@ -57,7 +59,7 @@ namespace vwa
                     // TODO: consider storing const
                     struct Parameter
                     {
-                        std::string type;
+                        Identifier type;
                         uint64_t pointerDepth;
                     };
                     std::vector<Parameter> parameters{};
@@ -70,7 +72,7 @@ namespace vwa
                     {
                         // This should really not be here, but I don't intend to
                         // change the rest of the code anytime soon, so it is here to stay.
-                        std::variant<std::string, size_t> type;
+                        std::variant<Identifier, size_t> type;
                         std::string name;
                         uint64_t pointerDepth;
                         bool mutable_;
@@ -88,7 +90,7 @@ namespace vwa
             std::vector<std::string> importedModules;
             std::vector<std::string> exportedImports;
 
-            std::unordered_map<std::string, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
+            std::unordered_map<Identifier, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
 
             // In theory it would be enough to just store the function names, but this way I can also make sure that the defintions are still the same at runtime.
             std::vector<std::variant<Symbol, Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.

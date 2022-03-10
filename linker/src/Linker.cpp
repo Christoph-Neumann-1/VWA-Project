@@ -54,7 +54,7 @@ namespace vwa
                 auto res = symbols.emplace(sym.name, &sym);
                 if (!res.second)
                 {
-                    throw std::runtime_error("Symbol " + sym.name + " already exists. Attempted import from " + import);
+                    throw std::runtime_error("Symbol " + sym.name.name + " already exists. Attempted import from " + import);
                 }
             }
         }
@@ -64,11 +64,11 @@ namespace vwa
             auto it = symbols.find(sym.name);
             if (it == symbols.end())
             {
-                throw std::runtime_error("Symbol " + sym.name + " is required");
+                throw std::runtime_error("Symbol " + sym.name.name + " is required");
             }
             if (sym.data.index() != it->second->data.index())
             {
-                throw std::runtime_error("Error could not satisfy dependency " + sym.name + ". Type mismatch");
+                throw std::runtime_error("Error could not satisfy dependency " + sym.name.name + ". Type mismatch");
             }
             f = it->second;
         }

@@ -5,21 +5,25 @@
 // TODO: remove copy constructors
 namespace vwa
 {
-    size_t typeFromString(const std::string &str, const std::vector<CachedStruct> &structs)
+    size_t typeFromId(const Identifier &id, const std::vector<CachedStruct> &structs)
     {
-        if (str == "void")
-            return Void;
-        if (str == "int")
-            return I64;
-        if (str == "float")
-            return F64;
-        if (str == "char")
-            return U8;
+        // I really hope no one is stupid enough to overwrite one of the primitive types
+        if (id.module_.empty())
+        {
+            if (id.name == "void")
+                return Void;
+            if (id.name == "int")
+                return I64;
+            if (id.name == "float")
+                return F64;
+            if (id.name == "char")
+                return U8;
+        }
 
-        auto it = std::find_if(structs.begin(), structs.end(), [&str](const CachedStruct &s)
-                               { return s.symbol->name == str; });
+        auto it = std::find_if(structs.begin(), structs.end(), [&id](const CachedStruct &s)
+                               { return s.symbol->name == id; });
         if (it == structs.end())
-            throw std::runtime_error("Could not find struct: " + str);
+            throw std::runtime_error("Could not find struct: " + id.name + " in module: " + id.module_);
         return numReservedIndices + std::distance(structs.begin(), it);
     }
     size_t getSizeOfType(size_t t, size_t ptr, const std::vector<CachedStruct> &structs)
@@ -52,7 +56,7 @@ namespace vwa
         struc.state = CachedStruct::Processing;
         for (auto &member : std::get<Linker::Module::Symbol::Struct>(struc.symbol->data).fields)
         {
-            member.type = typeFromString(std::get<0>(member.type), structs);
+            member.type = typeFromId(std::get<0>(member.type), structs);
             struc.members.push_back({struc.size, std::get<1>(member.type), member.pointerDepth});
             if (std::get<1>(member.type) < numReservedIndices)
             {
@@ -70,66 +74,66 @@ namespace vwa
     void finishFunctionCache(CachedFunction &func, const std::vector<CachedStruct> &structs)
     {
         auto &f = std::get<Linker::Module::Symbol::Function>(func.symbol->data);
-        func.returnType = {typeFromString(f.returnType.type, structs), f.returnType.pointerDepth};
+        func.returnType = {typeFromId(f.returnType.type, structs), f.returnType.pointerDepth};
         for (auto &param : f.parameters)
         {
-            func.args.push_back({typeFromString(param.type, structs), param.pointerDepth});
+            func.args.push_back({typeFromId(param.type, structs), param.pointerDepth});
         }
     }
+
+    // FIXME: only insert module name into Identifier when saving to Module, otherwise just accept, that some do not have a fully qualified name
 
     Cache generateCache(ProcessingResult &result, Logger &log)
     {
         // TODO: I need to make this more efficient, linear search through the entire list of structs is horrible.
         Cache cache;
-        cache.map.insert({"void", {Void, Cache::Type::Struct}});
-        cache.map.insert({"int", {I64, Cache::Type::Struct}});
-        cache.map.insert({"float", {F64, Cache::Type::Struct}});
-        cache.map.insert({"char", {U8, Cache::Type::Struct}});
+        cache.map.insert({{"void"}, {Void, Cache::Type::Struct}});
+        cache.map.insert({{"int"}, {I64, Cache::Type::Struct}});
+        cache.map.insert({{"float"}, {F64, Cache::Type::Struct}});
+        cache.map.insert({{"char"}, {U8, Cache::Type::Struct}});
 
         for (auto &sym : result.module->symbols)
             if (std::holds_alternative<Linker::Module::Symbol::Function>(sym.second->data))
             {
-                cache.functions.push_back(CachedFunction{.symbol = sym.second, .body = (
-                                                                                   {
-                                                                                       auto res = result.FunctionBodies.find(sym.first);
-                                                                                       res == result.FunctionBodies.end() ? nullptr : res->second;
-                                                                                   }),
+                cache.functions.push_back(CachedFunction{.symbol = sym.second, .body = ({
+                                                                                   auto res = result.FunctionBodies.find(sym.first.name);
+                                                                                   res == result.FunctionBodies.end() ? nullptr : res->second;
+                                                                               }),
                                                          .internal = false});
-                if (auto res = cache.map.insert({sym.first, {cache.functions.size() - 1, cache.Function}}).second; !res)
+                if (auto res = cache.map.insert({{sym.first}, {cache.functions.size() - 1, cache.Function}}).second; !res)
                 {
-                    log << Logger::Error << "Duplicate symbol: " << sym.first << '\n';
+                    log << Logger::Error << "Duplicate symbol: " << sym.first.name << '\n';
                     throw std::runtime_error("Duplicate symbol");
                 }
             }
             else
             {
                 cache.structs.push_back(CachedStruct{.symbol = sym.second, .internal = false});
-                if (auto res = cache.map.insert({sym.first, {cache.structs.size() - 1 + numReservedIndices, cache.Struct}}).second; !res)
+                if (auto res = cache.map.insert({{sym.first}, {cache.structs.size() - 1 + numReservedIndices, cache.Struct}}).second; !res)
                 {
-                    log << Logger::Error << "Duplicate symbol: " << sym.first << '\n';
+                    log << Logger::Error << "Duplicate symbol: " << sym.first.name << '\n';
                     throw std::runtime_error("Duplicate symbol");
                 }
             }
         for (auto &func : result.internalFunctions)
         {
-            cache.functions.push_back(CachedFunction{.symbol = &func, .body = (
-                                                                          {
-                                                                              auto res = result.FunctionBodies.find(func.name);
-                                                                              res == result.FunctionBodies.end() ? nullptr : res->second;
-                                                                          }),
+            cache.functions.push_back(CachedFunction{.symbol = &func, .body = ({
+                                                                          auto res = result.FunctionBodies.find(func.name.name);
+                                                                          res == result.FunctionBodies.end() ? nullptr : res->second;
+                                                                      }),
                                                      .internal = true});
-            if (auto res = cache.map.insert({func.name, {cache.functions.size() - 1, cache.Function}}).second; !res)
+            if (auto res = cache.map.insert({{func.name}, {cache.functions.size() - 1, cache.Function}}).second; !res)
             {
-                log << Logger::Error << "Duplicate symbol: " << func.name << '\n';
+                log << Logger::Error << "Duplicate symbol: " << func.name.name << " in module " << func.name.module_ << '\n';
                 throw std::runtime_error("Duplicate symbol");
             }
         }
         for (auto &struct_ : result.internalStructs)
         {
             cache.structs.push_back(CachedStruct{.symbol = &struct_, .internal = true});
-            if (auto res = cache.map.insert({struct_.name, {cache.structs.size() - 1 + numReservedIndices, cache.Struct}}).second; !res)
+            if (auto res = cache.map.insert({{struct_.name}, {cache.structs.size() - 1 + numReservedIndices, cache.Struct}}).second; !res)
             {
-                log << Logger::Error << "Duplicate symbol: " << struct_.name << '\n';
+                log << Logger::Error << "Duplicate symbol: " << struct_.name.name << " in module " << struct_.name.module_ << '\n';
                 throw std::runtime_error("Duplicate symbol");
             }
         }
@@ -160,12 +164,12 @@ namespace vwa
             auto it = cache.map.find(n.name);
             if (it == cache.map.end())
             {
-                log << Logger::Error << "Unknown type: " << n.name << '\n';
+                log << Logger::Error << "Unknown type: " << n.name.name << " in module" << n.name.module_ << '\n';
                 throw std::runtime_error("Unknown type");
             }
             if (it->second.second != Cache::Type::Struct)
             {
-                log << Logger::Error << "Type not found: " << n.name << " It is a function";
+                log << Logger::Error << "Type not found: " << n.name.name << " in module" << n.name.module_ << " It is a function";
                 throw std::runtime_error("Type not found");
             }
             node.value = Node::VarTypeCached{it->second.first, n.pointerDepth};
@@ -190,12 +194,12 @@ namespace vwa
         {
             if (func.body)
             {
-                log << Logger::Debug << "Updating function body: " << func.symbol->name << '\n';
+                log << Logger::Debug << "Updating function body: " << func.symbol->name.name << '\n';
                 UpdateVarUsage(cache, *func.body, log);
             }
             else
             {
-                log << Logger::Debug << "Skipping function: " << func.symbol->name << ". Reason: no body\n";
+                log << Logger::Debug << "Skipping function: " << func.symbol->name.name << ". Reason: no body\n";
             }
         }
         GenModBc(source.module, pass1, &cache, log);
@@ -228,7 +232,7 @@ namespace vwa
                 for (auto &param : fun.parameters)
                     parameters.push_back({param.type.name, param.type.pointerDepth});
                 Linker::Module::Symbol sym{
-                    fun.name, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Unlinked, ulong{0} - 1, std::move(parameters), {fun.returnType.name, fun.returnType.pointerDepth}, fun.constexpr_}};
+                    {fun.name}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Unlinked, ulong{0} - 1, std::move(parameters), {fun.returnType.name, fun.returnType.pointerDepth}, fun.constexpr_}};
                 if (fun.exported)
                     // TODO: remove copy
                     module.exportedSymbols.push_back(sym);
@@ -239,7 +243,7 @@ namespace vwa
                 std::vector<Linker::Module::Symbol::Struct::Field> fields;
                 for (auto &field : struct_.fields)
                     fields.push_back({field.type.name, field.name, field.type.pointerDepth, field.isMutable});
-                Linker::Module::Symbol sym{struct_.name, Linker::Module::Symbol::Struct{std::move(fields)}};
+                Linker::Module::Symbol sym{{struct_.name}, Linker::Module::Symbol::Struct{std::move(fields)}};
                 if (struct_.exported)
                     module.exportedSymbols.push_back(sym);
                 result.internalStructs.push_back(std::move(sym));

@@ -1,4 +1,5 @@
 #include <GenerateByteCode.hpp>
+// TODO: assert, at some point that primitive types are not overriden
 // TODO: output more useful format and use it for optimization
 namespace vwa
 {
@@ -90,7 +91,7 @@ namespace vwa
         log << Logger::Info << "Compiling function " << func.name << '\n';
         if (func.name == "main")
         {
-            if (func.returnType.name != "int" || func.returnType.pointerDepth)
+            if (func.returnType.name.name != "int" || func.returnType.pointerDepth)
             {
                 log << Logger::Error << "Main function must return int\n";
                 throw std::runtime_error("Main function must return int");
@@ -104,10 +105,10 @@ namespace vwa
             else
                 module->main = bc.size() + 1;
         }
-        auto cached = cache->map.find(func.name);
+        auto cached = cache->map.find({func.name, module->name});
         if (cached == cache->map.end() || cached->second.second != Cache::Type::Function)
         {
-            log << Logger::Error << "Function not found in cache";
+            log << Logger::Error << "Function not found in cache, this should never happen";
             throw std::runtime_error("Function not found in cache");
         }
         auto &funcData = cache->functions[cached->second.first];
@@ -475,7 +476,7 @@ namespace vwa
                                 throw std::runtime_error("Invalid node");
                             }
                             auto &name = std::get<std::string>(child.value);
-                            //FIXME What happens when passing a primitive??
+                            // FIXME What happens when passing a primitive??
                             auto &type = cache->structs[rt.type - numReservedIndices];
                             auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
                             auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
@@ -591,7 +592,7 @@ namespace vwa
         {
             // No support for function pointers yet
             auto &name = std::get<std::string>(node->children[0].value);
-            auto it = cache->map.find(name);
+            auto it = cache->map.find({name, module->name});
             if (it == cache->map.end())
             {
                 log << Logger::Error << "Function " << name << " not found\n";

@@ -158,7 +158,7 @@ namespace vwa
     [[nodiscard]] static Node::VarType parseType(const std::vector<Token> &tokens, size_t &pos)
     {
         Node::VarType result;
-        result.name = std::get<std::string>(tokens[pos].value);
+        result.name.name = std::get<std::string>(tokens[pos].value);
         for (++pos; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
             result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
         return result;
@@ -496,7 +496,7 @@ namespace vwa
     }
     // TODO: Check if it is faster to assume a variable first
     // Function pointers require a rewrite. Calls should not be handled in here
-    //FIXME: not generic enough, pass root in, it may be the result of some other op
+    // FIXME: not generic enough, pass root in, it may be the result of some other op
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
     {
         Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};
