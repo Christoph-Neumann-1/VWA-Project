@@ -30,6 +30,7 @@ namespace vwa
             comma,
             semicolon,
             colon,
+            double_colon, // Namespace
 
             dot,
             plus,
@@ -69,7 +70,6 @@ namespace vwa
             arrow_,
             const_expr,
             thick_arrow_, // Possibly for lambdas
-            double_colon, // Namespace
             elipsis,      // Variadic function and for loops
             new_,
             delete_,

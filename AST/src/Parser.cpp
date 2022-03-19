@@ -1,4 +1,5 @@
 #include <Parser.hpp>
+// TODO: remove the need for import statements by discovering which modules are needed
 
 namespace vwa
 {
@@ -338,6 +339,7 @@ namespace vwa
     [[nodiscard]] static Node parseUnary(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parsePrimary(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Node parseId(const std::vector<Token> &tokens, size_t &pos);
 
     [[nodiscard]] static Node parseExpression(const std::vector<Token> &tokens, size_t &pos)
     {
@@ -475,7 +477,7 @@ namespace vwa
             return {Node::Type::LiteralS, {std::get<std::string>(tokens[pos++].value)}, {}, line};
         }
         case Token::Type::id:
-            return parseMemberAccess(tokens, pos);
+            return parseId(tokens, pos);
         case Token::Type::lparen:
         {
             auto result = parseExpression(tokens, ++pos);
@@ -497,7 +499,40 @@ namespace vwa
     // TODO: Check if it is faster to assume a variable first
     // Function pointers require a rewrite. Calls should not be handled in here
     // FIXME: not generic enough, pass root in, it may be the result of some other op
-    [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
+    // TODO: decide if member access works better when implemented recursively or as a list
+    [[nodiscard]] static Node parseId(const std::vector<Token> &tokens, size_t &pos)
+    {
+        auto line = tokens[pos].line;
+        auto name= std::get<std::string>(tokens[pos++].value);
+        Identifier id;
+        if (tokens[pos].type == Token::Type::double_colon)
+        {
+            id.module_ = name;
+            id.name = std::get<std::string>(tokens[++pos].value);
+            ++pos;
+        }
+        else
+            id.name = name;
+        Node root{Node::Type::Variable, id, {}, line};
+        while (1)
+        {
+            switch (tokens[pos].type)
+            {
+            case Token::Type::lparen:
+                root = parseFunctionCall(std::move(root), tokens, pos);
+                break;
+            case Token::Type::dot:
+                if (tokens[++pos].type != Token::Type::id)
+                    throw std::runtime_error("Expected identifier");
+                root = {Node::Type::MemberAccess, {}, {std::move(root), parseId(tokens, pos)}, line};
+                break;
+            default:
+                return root;
+            }
+        }
+    }
+
+    [[deprecated]] [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
     {
         Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};
         while (1)

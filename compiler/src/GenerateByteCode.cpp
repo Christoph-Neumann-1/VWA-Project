@@ -73,10 +73,7 @@ namespace vwa
             {
                 // TODO: implement this
             case PrimitiveTypes::F64:
-                throw std::runtime_error("Casting is not yet implemented");
-                // bc.push_back({bc::ItoF});
-                // bc.push_back({bc::FtoC});
-                // break;
+                return bc::CtoF;
             case PrimitiveTypes::I64:
                 return bc::CtoI;
             default:
@@ -84,6 +81,9 @@ namespace vwa
                 throw std::runtime_error("Casting is only possible for builtin types");
             }
             return std::nullopt;
+        default:
+            log << Logger::Error << "Casting is only possible for builtin types\n";
+            throw std::runtime_error("Casting is only possible for builtin types");
         }
     }
     void compileFunc(Linker::Module *module, Cache *cache, const Pass1Result::Function &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log)
@@ -414,7 +414,7 @@ namespace vwa
         {
             if (node->children.size() == 4)
             {
-                auto &name = std::get<std::string>(node->children[0].value);
+                auto &name = std::get<Identifier>(node->children[0].value).name;
                 auto it = scopes.back().variables.find(name);
                 auto init = compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
                 if (auto instr = typeCast(it->second.type, it->second.pointerDepth, init.type, init.pointerDepth, log); instr)
@@ -439,7 +439,7 @@ namespace vwa
             else if (what.type == Node::Type::Variable)
             {
                 bc.push_back({bc::WriteRel});
-                auto &name = std::get<std::string>(what.value);
+                auto &name = std::get<Identifier>(what.value).name; // This is ok, as there are no global variables
                 for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
                 {
                     auto it2 = it->variables.find(name);
@@ -451,10 +451,13 @@ namespace vwa
                     }
                 }
             }
+            // FIXME: update logic for new structure of member access
             else if (what.type == Node::Type::MemberAccess)
             {
                 auto &root = what.children[0];
-                auto &name = std::get<std::string>(root.value);
+                auto &name = std::get<Identifier>(root.value).name;
+                if (std::get<Identifier>(root.value).module_ != "")
+                    throw std::runtime_error("Modules not properly supported yet");
                 bc.push_back({bc::WriteRel});
                 for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
                 {
@@ -475,7 +478,7 @@ namespace vwa
                             {
                                 throw std::runtime_error("Invalid node");
                             }
-                            auto &name = std::get<std::string>(child.value);
+                            auto &name = std::get<Identifier>(child.value).name;
                             // FIXME What happens when passing a primitive??
                             auto &type = cache->structs[rt.type - numReservedIndices];
                             auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
@@ -509,7 +512,7 @@ namespace vwa
         }
         case Node::Type::Variable:
         {
-            auto &name = std::get<std::string>(node->value);
+            auto &name = std::get<Identifier>(node->value).name;
             for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
             {
                 auto it2 = it->variables.find(name);
@@ -591,23 +594,24 @@ namespace vwa
         case Node::Type::CallFunc:
         {
             // No support for function pointers yet
-            auto &name = std::get<std::string>(node->children[0].value);
-            auto it = cache->map.find({name, module->name});
+            auto &name = std::get<Identifier>(node->children[0].value);
+            auto it = cache->map.find(name);
+            it=it==cache->map.end()?cache->map.find({name.name,module->name}):it;
             if (it == cache->map.end())
             {
-                log << Logger::Error << "Function " << name << " not found\n";
+                log << Logger::Error << "Function " << name.name << " not found\n";
                 throw std::runtime_error("Function not found");
             }
             if (it->second.second == Cache::Type::Struct)
             {
-                log << Logger::Error << "Symbol " << name << " is a struct, not a function\n";
+                log << Logger::Error << "Symbol " << name.name << " is a struct, not a function\n";
                 throw std::runtime_error("Symbol is a struct, not a function");
             }
             auto &func = cache->functions[it->second.first];
             auto nArgs = node->children.size() - 1;
             if (nArgs != func.args.size())
             {
-                log << Logger::Error << "Function " << name << " expects " << func.args.size() << " arguments, but got " << nArgs << "\n";
+                log << Logger::Error << "Function " << name.name << " expects " << func.args.size() << " arguments, but got " << nArgs << "\n";
                 throw std::runtime_error("Function expects different number of arguments");
             }
             size_t argSize = 0;
@@ -663,7 +667,7 @@ namespace vwa
                 {
                     throw std::runtime_error("Invalid node");
                 }
-                auto &name = std::get<std::string>(child.value);
+                auto &name = std::get<Identifier>(child.value).name;
                 auto &type = cache->structs[rootRes.type - numReservedIndices];
                 auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
                 auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)

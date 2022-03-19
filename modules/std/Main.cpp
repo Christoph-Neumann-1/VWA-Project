@@ -227,7 +227,7 @@ extern "C" Linker::Module *MODULE_LOAD()
 {
     // printf(ColorD("Debug:") ResetColor "Loading std library\n");
     // mod.exportedSymbols.push_back({"add", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = add}, {{"int", 0}, {"int", 0}}, {"int", 0}, false}});
-    mod.exportedSymbols.push_back({Identifier{"sayHello"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = sayHello}, {}, {{"void"}, 0}, false}});
+    mod.exportedSymbols.push_back({Identifier{"sayHello", "std"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = sayHello}, {}, {{"void"}, 0}, false}});
     mod.exportedSymbols.push_back({Identifier{"intArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(intArray)}, {{{"int"}, 0}}, {{"int"}, 1}, false}});
     mod.exportedSymbols.push_back({Identifier{"delIntArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(delIntArray)}, {{{"int"}, 1}}, {{"void"}, 0}, false}});
     return &mod;

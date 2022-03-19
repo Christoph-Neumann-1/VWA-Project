@@ -136,7 +136,15 @@ namespace vwa
                 tokens.push_back({Token::Type::semicolon, {}});
                 break;
             case ':':
-                tokens.push_back({Token::Type::colon, {}});
+                if (*(it + 1) == ':')
+                {
+                    tokens.push_back({Token::Type::double_colon, {}});
+                    ++it;
+                }
+                else
+                {
+                    tokens.push_back({Token::Type::colon, {}});
+                }
                 break;
             case '.':
                 if (!std::isdigit(*(it + 1)))
