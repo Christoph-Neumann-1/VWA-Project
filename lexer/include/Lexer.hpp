@@ -68,6 +68,7 @@ namespace vwa
 
             // Not implemented yet
             cast,
+            nullptr_,
             arrow_,
             const_expr,
             thick_arrow_, // Possibly for lambdas
@@ -103,6 +104,7 @@ namespace vwa
         {"sizeof", Token::Type::size_of},
         {"func", Token::Type::func_},
         {"to", Token::Type::cast},
+        {"nullptr",Token::Type::nullptr_},
     };
 
     // The reference is not const because I can't be bothered to implement a const_iterator
