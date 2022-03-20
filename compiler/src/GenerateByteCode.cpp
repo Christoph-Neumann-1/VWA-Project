@@ -4,6 +4,31 @@
 namespace vwa
 {
 
+    auto &getMember(const std::string &name, const size_t type, const Cache &cache)
+    {
+        if (type < numReservedIndices)
+            throw std::runtime_error("Attempted member access on primitive type");
+        auto &typeInfo = cache.structs[type - numReservedIndices].symbol->data;
+        if (auto val = std::get_if<1>(&typeInfo))
+        {
+            if (auto it = std::find_if(val->fields.begin(), val->fields.end(), [&name](const auto &field)
+                                       { return field.name == name; });
+                it != val->fields.end())
+            {
+                auto idx = std::distance(val->fields.begin(), it);
+                return cache.structs[type - numReservedIndices].members[idx];
+            }
+            else
+            {
+                throw std::runtime_error("Field " + name + " not found in struct " + cache.structs[type - numReservedIndices].symbol->name.name);
+            }
+        }
+        else
+        {
+            throw std::runtime_error("Attempted member access on non-struct type");
+        }
+    }
+
     void discard(NodeResult result, std::vector<bc::BcToken> &bc, Cache *cache)
     {
         auto size = getSizeOfType(result.type, result.pointerDepth, cache->structs);
@@ -239,7 +264,7 @@ namespace vwa
                 bc.push_back({bc::Push});
                 pushToBc(bc, uint64_t{scope.size});
             }
-            // I do not know why, but this entered a infinite loop at runtime
+            // I do not know why, but this entered a infinite loop, but it works now so I won't touch it
             // for (auto &child : node->children)
             for (size_t i = 0; i < node->children.size() - 1; ++i)
                 // Discard means that the value is not used, it is just dropped from the stack
@@ -414,7 +439,7 @@ namespace vwa
         {
             if (node->children.size() == 4)
             {
-                auto &name = std::get<Identifier>(node->children[0].value).name;
+                auto &name = std::get<std::string>(node->children[0].value);
                 auto it = scopes.back().variables.find(name);
                 auto init = compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
                 if (auto instr = typeCast(it->second.type, it->second.pointerDepth, init.type, init.pointerDepth, log); instr)
@@ -451,52 +476,67 @@ namespace vwa
                     }
                 }
             }
-            // FIXME: update logic for new structure of member access
+            // TODO: operator -> either here or by rewriting it earlier
             else if (what.type == Node::Type::MemberAccess)
             {
-                auto &root = what.children[0];
-                auto &name = std::get<Identifier>(root.value).name;
-                if (std::get<Identifier>(root.value).module_ != "")
-                    throw std::runtime_error("Modules not properly supported yet");
-                bc.push_back({bc::WriteRel});
-                for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                auto evalTree = [&](const Node &node, auto &self) ->std::tuple<size_t,size_t,size_t,bool>
                 {
-                    if (rt.pointerDepth)
+                    switch (node.type)
                     {
-                        log << "Cannot use operator . on a pointer\n";
-                        throw std::runtime_error("Cannot use operator . on a pointer");
-                    }
-                    auto it2 = it->variables.find(name);
-                    if (it2 != it->variables.end())
+                    case Node::Type::Variable:
                     {
-                        size_t offset = it2->second.offset;
-                        rt.type = it2->second.type;
-                        for (uint i = 1; i < what.children.size(); ++i)
+                        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
                         {
-                            auto &child = what.children[i];
-                            if (child.type != Node::Type::Variable)
-                            {
-                                throw std::runtime_error("Invalid node");
-                            }
-                            auto &name = std::get<Identifier>(child.value).name;
-                            // FIXME What happens when passing a primitive??
-                            auto &type = cache->structs[rt.type - numReservedIndices];
-                            auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
-                            auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
-                                                      { return f.name == name; });
-                            if (field == sym.fields.end())
-                            {
-                                log << Logger::Error << "Field " << name << " not found in struct "
-                                    << "\n";
-                                throw std::runtime_error("Field not found");
-                            }
-                            rt = {std::get<1>(field->type), field->pointerDepth};
-                            if (i < node->children.size() - 1)
-                                offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
+                            auto it2 = it->variables.find(std::get<Identifier>(node.value).name);
+                            if (it2 != it->variables.end())
+                                return {it2->second.type, it2->second.pointerDepth, it2->second.offset, false};
                         }
-                        pushToBc<intptr_t>(bc, offset);
+                        log<<Logger::Error<<"Cannot access member\n";
+                        throw std::runtime_error("Cannot find variable");
                     }
+                    case Node::Type::MemberAccess:
+                    {
+                        auto prev=self(node.children[0],self);
+                        if(std::get<1>(prev))
+                        {
+                            log<<Logger::Error<<"Cannot access member of ptr\n";
+                            throw std::runtime_error("Cannot access member of ptr");
+                        }
+                        auto &mem=getMember(std::get<std::string>(node.children[1].value),std::get<0>(prev),*cache);
+                        return {mem.type,mem.ptrDepth,mem.offset+std::get<2>(prev),std::get<3>(prev)};
+                    }
+                    case Node::Type::Dereference:
+                    {
+                        auto res=compileNode(module,cache,&node.children[0],fRetT,constPool,bc,scopes,log);
+                        if(!res.pointerDepth)
+                        {
+                            log<<Logger::Error<<"Cannot dereference non-pointer\n";
+                            throw std::runtime_error("Cannot dereference non-pointer");
+                        }
+                        return {res.type,res.pointerDepth-1,0,true};
+                    }
+                    default:
+                        log<<Logger::Error<<"Cannot access member of temporary\n";
+                        throw std::runtime_error("Cannot access member of temporary");
+                    }
+                };
+                auto res=evalTree(what,evalTree);
+                switch(std::get<3>(res))
+                {
+                case false:
+                    bc.push_back({bc::WriteRel});
+                    pushToBc<intptr_t>(bc,std::get<2>(res));
+                    break;
+                case true:
+                    bc.push_back({bc::Push64});
+                    //This is probably the wrong sign, but since integers are twos complement this should be fine
+                    pushToBc<uint64_t>(bc,std::get<2>(res));
+                    bc.push_back({bc::AddI});
+                    bc.push_back({bc::WriteAbs});
+                    break;
                 }
+                rt.type=std::get<0>(res);
+                rt.pointerDepth=std::get<1>(res);
             }
             else
             {
@@ -577,7 +617,7 @@ namespace vwa
         case Node::Type::AddressOf:
         {
             // TODO: support structs
-            auto &name = std::get<std::string>(node->children[0].value);
+            auto &name = std::get<Identifier>(node->children[0].value).name;
             for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
             {
                 auto it2 = it->variables.find(name);
@@ -596,7 +636,7 @@ namespace vwa
             // No support for function pointers yet
             auto &name = std::get<Identifier>(node->children[0].value);
             auto it = cache->map.find(name);
-            it=it==cache->map.end()?cache->map.find({name.name,module->name}):it;
+            it = it == cache->map.end() ? cache->map.find({name.name, module->name}) : it;
             if (it == cache->map.end())
             {
                 log << Logger::Error << "Function " << name.name << " not found\n";

@@ -67,6 +67,7 @@ namespace vwa
             eof,
 
             // Not implemented yet
+            cast,
             arrow_,
             const_expr,
             thick_arrow_, // Possibly for lambdas
@@ -101,6 +102,7 @@ namespace vwa
         {"tailrec", Token::Type::tailrec},
         {"sizeof", Token::Type::size_of},
         {"func", Token::Type::func_},
+        {"to", Token::Type::cast},
     };
 
     // The reference is not const because I can't be bothered to implement a const_iterator
