@@ -536,6 +536,9 @@ namespace vwa
             case Token::Type::lparen:
                 root = parseFunctionCall(std::move(root), tokens, pos);
                 break;
+            case Token::Type::arrow_:
+                root={Node::Type::Dereference,{},{std::move(root)},root.line};
+                [[fallthrough]];
             case Token::Type::dot:
                 if (tokens[++pos].type != Token::Type::id)
                     throw std::runtime_error("Expected identifier");
