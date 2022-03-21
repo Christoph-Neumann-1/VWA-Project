@@ -74,7 +74,7 @@ namespace vwa
                         // change the rest of the code anytime soon, so it is here to stay.
                         std::variant<Identifier, size_t> type;
                         std::string name;
-                        uint64_t pointerDepth;
+                        uint32_t pointerDepth;
                         bool mutable_;
                     };
                     std::vector<Field> fields;

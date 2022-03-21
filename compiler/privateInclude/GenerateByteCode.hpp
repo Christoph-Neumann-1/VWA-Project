@@ -21,7 +21,7 @@ namespace vwa
     struct NodeResult
     {
         size_t type = PrimitiveTypes::Void;
-        size_t pointerDepth = 0;
+        uint32_t pointerDepth = 0;
     };
 
     // TODO: push to const

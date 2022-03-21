@@ -27,7 +27,7 @@ namespace vwa
         {
             uint64_t offset;
             uint64_t type;
-            uint64_t pointerDepth;
+            uint32_t pointerDepth;
             Variable(uint64_t offset, uint64_t type, uint64_t pointerDepth) : offset(offset), type(type), pointerDepth(pointerDepth) {}
         };
         // TODO: UUID for variables
@@ -44,7 +44,7 @@ namespace vwa
         {
             size_t offset = -1;
             size_t type = -1; // Not actually an index, the first few values are reserved for primitive types
-            size_t ptrDepth = -1;
+            uint32_t ptrDepth = -1;
         };
         size_t size = -1;
         std::vector<Member> members{};

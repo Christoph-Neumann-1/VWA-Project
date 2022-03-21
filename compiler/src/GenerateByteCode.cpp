@@ -681,6 +681,7 @@ namespace vwa
             return {func.returnType.type, func.returnType.pointerDepth};
         }
 
+        //TODO: implement something like decltype to reduce code length
         case Node::Type::SizeOf:
         {
             auto t = std::get<Node::VarTypeCached>(node->value);
@@ -691,45 +692,118 @@ namespace vwa
         }
         case Node::Type::MemberAccess:
         {
-            auto &root = node->children[0];
-            int64_t offset = 0;
-            auto rootRes = compileNode(module, cache, &root, fRetT, constPool, bc, scopes, log);
-            auto rootRes2 = rootRes;
-            for (uint i = 1; i < node->children.size(); ++i)
+            enum Type
             {
-                if (rootRes.pointerDepth)
+                ReadAbs,//Root is a pointer
+                ReadRel,//Root is a local variable
+                ReadTmp,//Root is a temporary value
+            };
+
+            auto walkTree = [&](const Node &node, auto &self)->std::tuple<Node::VarTypeCached, Type,size_t>{
+                
+                switch(node.type)
                 {
-                    log << "Cannot use operator . on a pointer\n";
-                    throw std::runtime_error("Cannot use operator . on a pointer");
+                    case Node::Type::Variable:
+                    //TODO I really need to extract variable lookup into a function
+                    {
+                        auto &name = std::get<Identifier>(node.value).name;
+                        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                        {
+                            auto it2 = it->variables.find(name);
+                            if (it2 != it->variables.end())
+                                return {{it2->second.type, it2->second.pointerDepth},ReadRel, it2->second.offset};
+                        }
+                        log << Logger::Error << "Cannot access non-variable yet\n";
+                        throw std::runtime_error("Did not find variable");
+                    }
+                    case Node::Type::Dereference:
+                    {
+                        auto val=compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
+                        if(val.pointerDepth==0)
+                        {
+                            log << Logger::Error << "Cannot dereference non-pointer\n";
+                            throw std::runtime_error("Cannot dereference non-pointer");
+                        }
+                        return {Node::VarTypeCached{val.type, val.pointerDepth-1},ReadAbs,0};
+                    }
+                    case Node::Type::MemberAccess:
+                    {
+                        auto [t,type,offset]=self(node.children[0],self);
+                        auto &name = std::get<std::string>(node.children[1].value);
+                        if(t.pointerDepth)
+                        {
+                            log << Logger::Error << "Cannot access member ptr\n";
+                            throw std::runtime_error("Cannot access member ptr");
+                        }
+                        auto &mem=getMember(name,t.index,*cache);
+                        return {{mem.type,mem.ptrDepth},type,offset+mem.offset};
+                    }
+                    default:
+                    {
+                        auto val=compileNode(module, cache, &node, fRetT, constPool, bc, scopes, log);
+                        bc.push_back({bc::ReadMember});
+                        pushToBc<uint64_t>(bc, getSizeOfType(val.type, val.pointerDepth, cache->structs));
+                        return {{val.type,val.pointerDepth},ReadTmp,0};
+                    }
                 }
-                auto &child = node->children[i];
-                if (child.type != Node::Type::Variable)
-                {
-                    throw std::runtime_error("Invalid node");
-                }
-                auto &name = std::get<Identifier>(child.value).name;
-                auto &type = cache->structs[rootRes.type - numReservedIndices];
-                auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
-                auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
-                                          { return f.name == name; });
-                if (field == sym.fields.end())
-                {
-                    log << Logger::Error << "Field " << name << " not found in struct "
-                        << "\n";
-                    throw std::runtime_error("Field not found");
-                }
-                rootRes = {std::get<1>(field->type), field->pointerDepth};
-                if (i < node->children.size() - 1)
-                    offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
+            };
+            auto [t,type,offset]=walkTree(*node,walkTree);
+            switch(type)
+            {
+                case ReadAbs:
+                bc.push_back({bc::Push64});
+                pushToBc<uint64_t>(bc,offset);
+                bc.push_back({bc::AddI});
+                bc.push_back({bc::ReadAbs});
+                break;
+                case ReadRel:
+                bc.push_back({bc::ReadRel});
+                pushToBc<uint64_t>(bc,offset);
+                break;
+                case ReadTmp:
+                pushToBc<uint64_t>(bc,offset);
             }
-            auto totalSize = getSizeOfType(rootRes2.type, rootRes2.pointerDepth, cache->structs);
-            auto resultSize = getSizeOfType(rootRes.type, rootRes.pointerDepth, cache->structs);
-            bc.push_back({bc::ReadMember});
-            pushToBc<uint64_t>(bc, totalSize);
-            pushToBc<uint64_t>(bc, offset);
-            pushToBc<uint64_t>(bc, resultSize);
-            return rootRes;
-            // TODO: reduce instruction count
+            pushToBc<uint64_t>(bc,getSizeOfType(t.index,t.pointerDepth,cache->structs));
+            return {t.index,t.pointerDepth};
+            // auto &root = node->children[0];
+            // int64_t offset = 0;
+            // auto rootRes = compileNode(module, cache, &root, fRetT, constPool, bc, scopes, log);
+            // auto rootRes2 = rootRes;
+            // for (uint i = 1; i < node->children.size(); ++i)
+            // {
+            //     if (rootRes.pointerDepth)
+            //     {
+            //         log << "Cannot use operator . on a pointer\n";
+            //         throw std::runtime_error("Cannot use operator . on a pointer");
+            //     }
+            //     auto &child = node->children[i];
+            //     if (child.type != Node::Type::Variable)
+            //     {
+            //         throw std::runtime_error("Invalid node");
+            //     }
+            //     auto &name = std::get<Identifier>(child.value).name;
+            //     auto &type = cache->structs[rootRes.type - numReservedIndices];
+            //     auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
+            //     auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
+            //                               { return f.name == name; });
+            //     if (field == sym.fields.end())
+            //     {
+            //         log << Logger::Error << "Field " << name << " not found in struct "
+            //             << "\n";
+            //         throw std::runtime_error("Field not found");
+            //     }
+            //     rootRes = {std::get<1>(field->type), field->pointerDepth};
+            //     if (i < node->children.size() - 1)
+            //         offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
+            // }
+            // auto totalSize = getSizeOfType(rootRes2.type, rootRes2.pointerDepth, cache->structs);
+            // auto resultSize = getSizeOfType(rootRes.type, rootRes.pointerDepth, cache->structs);
+            // bc.push_back({bc::ReadMember});
+            // pushToBc<uint64_t>(bc, totalSize);
+            // pushToBc<uint64_t>(bc, offset);
+            // pushToBc<uint64_t>(bc, resultSize);
+            // return rootRes;
+            // // TODO: reduce instruction count
         }
         }
 
