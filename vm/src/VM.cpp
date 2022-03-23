@@ -21,11 +21,11 @@ namespace vwa
             // TODO: instruction for ptr to int64_t
             switch (bc->instruction)
             {
-            case LastInstr:
-                return {LastInstr, ExitCode::HelperInstructionInCode};
             case CallFunc:
-                // TODO: find most efficient way to do this
-                return {CallFunc, ExitCode::HelperInstructionInCode};
+            case Break:
+            case Continue:
+            case LastInstr:
+                return {bc->instruction, ExitCode::HelperInstructionInCode};
             // No cleanup is necessary, this is supposed to terminate the program.
             case Exit:
                 // TODO: refactor this to also return the exit value on stack allowing for returning different types.

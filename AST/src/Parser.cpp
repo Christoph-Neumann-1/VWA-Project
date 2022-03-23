@@ -449,7 +449,8 @@ namespace vwa
         case Token::Type::ampersand:
         {
             auto line = tokens[pos].line;
-            return {Node::Type::AddressOf, {}, {parseUnary(tokens, ++pos)}, line};
+            //parseId should be fine here as I don't want temporary values anyways. That does not mean, however there won't be any issues.
+            return {Node::Type::AddressOf, {}, {parseId(tokens, ++pos)}, line};
         }
         default:
             return parsePrimary(tokens, pos);

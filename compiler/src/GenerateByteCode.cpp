@@ -1,6 +1,7 @@
 #include <GenerateByteCode.hpp>
-// TODO: assert, at some point that primitive types are not overriden
-// TODO: output more useful format and use it for optimization
+// FIXME: if any code for casting is inserted, I NEED to make sure there are no problems with reads relative to the instruction ptr. I'll need that should I ever implement statement expressions.
+//  TODO: assert, at some point that primitive types are not overriden
+//  TODO: output more useful format and use it for optimization
 namespace vwa
 {
 
@@ -479,7 +480,7 @@ namespace vwa
             // TODO: operator -> either here or by rewriting it earlier
             else if (what.type == Node::Type::MemberAccess)
             {
-                auto evalTree = [&](const Node &node, auto &self) ->std::tuple<size_t,size_t,size_t,bool>
+                auto evalTree = [&](const Node &node, auto &self) -> std::tuple<size_t, size_t, size_t, bool>
                 {
                     switch (node.type)
                     {
@@ -491,52 +492,52 @@ namespace vwa
                             if (it2 != it->variables.end())
                                 return {it2->second.type, it2->second.pointerDepth, it2->second.offset, false};
                         }
-                        log<<Logger::Error<<"Cannot access member\n";
+                        log << Logger::Error << "Cannot access member\n";
                         throw std::runtime_error("Cannot find variable");
                     }
                     case Node::Type::MemberAccess:
                     {
-                        auto prev=self(node.children[0],self);
-                        if(std::get<1>(prev))
+                        auto prev = self(node.children[0], self);
+                        if (std::get<1>(prev))
                         {
-                            log<<Logger::Error<<"Cannot access member of ptr\n";
+                            log << Logger::Error << "Cannot access member of ptr\n";
                             throw std::runtime_error("Cannot access member of ptr");
                         }
-                        auto &mem=getMember(std::get<std::string>(node.children[1].value),std::get<0>(prev),*cache);
-                        return {mem.type,mem.ptrDepth,mem.offset+std::get<2>(prev),std::get<3>(prev)};
+                        auto &mem = getMember(std::get<std::string>(node.children[1].value), std::get<0>(prev), *cache);
+                        return {mem.type, mem.ptrDepth, mem.offset + std::get<2>(prev), std::get<3>(prev)};
                     }
                     case Node::Type::Dereference:
                     {
-                        auto res=compileNode(module,cache,&node.children[0],fRetT,constPool,bc,scopes,log);
-                        if(!res.pointerDepth)
+                        auto res = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
+                        if (!res.pointerDepth)
                         {
-                            log<<Logger::Error<<"Cannot dereference non-pointer\n";
+                            log << Logger::Error << "Cannot dereference non-pointer\n";
                             throw std::runtime_error("Cannot dereference non-pointer");
                         }
-                        return {res.type,res.pointerDepth-1,0,true};
+                        return {res.type, res.pointerDepth - 1, 0, true};
                     }
                     default:
-                        log<<Logger::Error<<"Cannot access member of temporary\n";
+                        log << Logger::Error << "Cannot access member of temporary\n";
                         throw std::runtime_error("Cannot access member of temporary");
                     }
                 };
-                auto res=evalTree(what,evalTree);
-                switch(std::get<3>(res))
+                auto res = evalTree(what, evalTree);
+                switch (std::get<3>(res))
                 {
                 case false:
                     bc.push_back({bc::WriteRel});
-                    pushToBc<intptr_t>(bc,std::get<2>(res));
+                    pushToBc<intptr_t>(bc, std::get<2>(res));
                     break;
                 case true:
                     bc.push_back({bc::Push64});
-                    //This is probably the wrong sign, but since integers are twos complement this should be fine
-                    pushToBc<uint64_t>(bc,std::get<2>(res));
+                    // This is probably the wrong sign, but since integers are twos complement this should be fine
+                    pushToBc<uint64_t>(bc, std::get<2>(res));
                     bc.push_back({bc::AddI});
                     bc.push_back({bc::WriteAbs});
                     break;
                 }
-                rt.type=std::get<0>(res);
-                rt.pointerDepth=std::get<1>(res);
+                rt.type = std::get<0>(res);
+                rt.pointerDepth = std::get<1>(res);
             }
             else
             {
@@ -603,6 +604,7 @@ namespace vwa
             bc.push_back({bc::JumpRel});
             pushToBc<int64_t>(bc, pos - bc.size() + 1);
             *reinterpret_cast<int64_t *>(&bc[pos2]) = bc.size() - pos2 + 1;
+            // TODO: replace continue and break with correct instruction. This requires having a function which allows skipping instructions.
             return {};
         }
         case Node::Type::Dereference:
@@ -616,20 +618,76 @@ namespace vwa
         // Only works on local variables
         case Node::Type::AddressOf:
         {
-            // TODO: support structs
-            auto &name = std::get<Identifier>(node->children[0].value).name;
-            for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+            auto evalTree = [&](const Node &node, auto &self) -> std::tuple<size_t, size_t, size_t, bool>
             {
-                auto it2 = it->variables.find(name);
-                if (it2 != it->variables.end())
+                switch (node.type)
                 {
-                    bc.push_back({bc::AbsOf});
-                    pushToBc<uint64_t>(bc, it2->second.offset);
-                    return {it2->second.type, 1};
+                case Node::Type::Variable:
+                {
+                    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+                    {
+                        auto it2 = it->variables.find(std::get<Identifier>(node.value).name);
+                        if (it2 != it->variables.end())
+                            return {it2->second.type, it2->second.pointerDepth, it2->second.offset, false};
+                    }
+                    log << Logger::Error << "Cannot access member\n";
+                    throw std::runtime_error("Cannot find variable");
                 }
+                case Node::Type::MemberAccess:
+                {
+                    auto prev = self(node.children[0], self);
+                    if (std::get<1>(prev))
+                    {
+                        log << Logger::Error << "Cannot access member of ptr\n";
+                        throw std::runtime_error("Cannot access member of ptr");
+                    }
+                    auto &mem = getMember(std::get<std::string>(node.children[1].value), std::get<0>(prev), *cache);
+                    return {mem.type, mem.ptrDepth, mem.offset + std::get<2>(prev), std::get<3>(prev)};
+                }
+                case Node::Type::Dereference:
+                {
+                    auto res = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
+                    if (!res.pointerDepth)
+                    {
+                        log << Logger::Error << "Cannot dereference non-pointer\n";
+                        throw std::runtime_error("Cannot dereference non-pointer");
+                    }
+                    return {res.type, res.pointerDepth - 1, 0, true};
+                }
+                default:
+                    log << Logger::Error << "Cannot access member of temporary\n";
+                    throw std::runtime_error("Cannot access member of temporary");
+                }
+            };
+            auto res = evalTree(node->children[0], evalTree);
+            switch (std::get<3>(res))
+            {
+            case false:
+                bc.push_back({bc::AbsOf});
+                pushToBc<intptr_t>(bc, std::get<2>(res));
+                break;
+            case true:
+                bc.push_back({bc::Push64});
+                // This is probably the wrong sign, but since integers are twos complement this should be fine
+                pushToBc<uint64_t>(bc, std::get<2>(res));
+                bc.push_back({bc::AddI});
+                break;
             }
-            log << Logger::Error << "Cannot take address of non-variable yet\n";
-            throw std::runtime_error("Did not find variable");
+            return {std::get<0>(res), std::get<1>(res) + 1};
+            // TODO: support structs
+            // auto &name = std::get<Identifier>(node->children[0].value).name;
+            // for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+            // {
+            //     auto it2 = it->variables.find(name);
+            //     if (it2 != it->variables.end())
+            //     {
+            //         bc.push_back({bc::AbsOf});
+            //         pushToBc<uint64_t>(bc, it2->second.offset);
+            //         return {it2->second.type, 1};
+            //     }
+            // }
+            // log << Logger::Error << "Cannot take address of non-variable yet\n";
+            // throw std::runtime_error("Did not find variable");
         }
         case Node::Type::CallFunc:
         {
@@ -662,26 +720,13 @@ namespace vwa
                 if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
                     bc.push_back({*instr});
             }
-            if (func.finished && func.internal)
-            {
-                bc.push_back({bc::JumpFuncRel});
-                pushToBc<int64_t>(bc, func.address - bc.size() + 1);
-            }
-            else if (auto f = std::get<Linker::Module::Symbol::Function>(func.symbol->data); f.type == Linker::Module::Symbol::Function::Type::External)
-            {
-                bc.push_back({bc::JumpFFI});
-                pushToBc<size_t>(bc, f.impl.index);
-            }
-            else
-            {
-                bc.push_back({bc::CallFunc});
-                pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
-            }
+            bc.push_back({bc::CallFunc});
+            pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
             pushToBc<uint64_t>(bc, argSize);
             return {func.returnType.type, func.returnType.pointerDepth};
         }
 
-        //TODO: implement something like decltype to reduce code length
+        // TODO: implement something like decltype to reduce code length
         case Node::Type::SizeOf:
         {
             auto t = std::get<Node::VarTypeCached>(node->value);
@@ -694,77 +739,77 @@ namespace vwa
         {
             enum Type
             {
-                ReadAbs,//Root is a pointer
-                ReadRel,//Root is a local variable
-                ReadTmp,//Root is a temporary value
+                ReadAbs, // Root is a pointer
+                ReadRel, // Root is a local variable
+                ReadTmp, // Root is a temporary value
             };
 
-            auto walkTree = [&](const Node &node, auto &self)->std::tuple<Node::VarTypeCached, Type,size_t>{
-                
-                switch(node.type)
+            auto walkTree = [&](const Node &node, auto &self) -> std::tuple<Node::VarTypeCached, Type, size_t>
+            {
+                switch (node.type)
                 {
-                    case Node::Type::Variable:
-                    //TODO I really need to extract variable lookup into a function
+                case Node::Type::Variable:
+                    // TODO I really need to extract variable lookup into a function
                     {
                         auto &name = std::get<Identifier>(node.value).name;
                         for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
                         {
                             auto it2 = it->variables.find(name);
                             if (it2 != it->variables.end())
-                                return {{it2->second.type, it2->second.pointerDepth},ReadRel, it2->second.offset};
+                                return {{it2->second.type, it2->second.pointerDepth}, ReadRel, it2->second.offset};
                         }
                         log << Logger::Error << "Cannot access non-variable yet\n";
                         throw std::runtime_error("Did not find variable");
                     }
-                    case Node::Type::Dereference:
+                case Node::Type::Dereference:
+                {
+                    auto val = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
+                    if (val.pointerDepth == 0)
                     {
-                        auto val=compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
-                        if(val.pointerDepth==0)
-                        {
-                            log << Logger::Error << "Cannot dereference non-pointer\n";
-                            throw std::runtime_error("Cannot dereference non-pointer");
-                        }
-                        return {Node::VarTypeCached{val.type, val.pointerDepth-1},ReadAbs,0};
+                        log << Logger::Error << "Cannot dereference non-pointer\n";
+                        throw std::runtime_error("Cannot dereference non-pointer");
                     }
-                    case Node::Type::MemberAccess:
+                    return {Node::VarTypeCached{val.type, val.pointerDepth - 1}, ReadAbs, 0};
+                }
+                case Node::Type::MemberAccess:
+                {
+                    auto [t, type, offset] = self(node.children[0], self);
+                    auto &name = std::get<std::string>(node.children[1].value);
+                    if (t.pointerDepth)
                     {
-                        auto [t,type,offset]=self(node.children[0],self);
-                        auto &name = std::get<std::string>(node.children[1].value);
-                        if(t.pointerDepth)
-                        {
-                            log << Logger::Error << "Cannot access member ptr\n";
-                            throw std::runtime_error("Cannot access member ptr");
-                        }
-                        auto &mem=getMember(name,t.index,*cache);
-                        return {{mem.type,mem.ptrDepth},type,offset+mem.offset};
+                        log << Logger::Error << "Cannot access member ptr\n";
+                        throw std::runtime_error("Cannot access member ptr");
                     }
-                    default:
-                    {
-                        auto val=compileNode(module, cache, &node, fRetT, constPool, bc, scopes, log);
-                        bc.push_back({bc::ReadMember});
-                        pushToBc<uint64_t>(bc, getSizeOfType(val.type, val.pointerDepth, cache->structs));
-                        return {{val.type,val.pointerDepth},ReadTmp,0};
-                    }
+                    auto &mem = getMember(name, t.index, *cache);
+                    return {{mem.type, mem.ptrDepth}, type, offset + mem.offset};
+                }
+                default:
+                {
+                    auto val = compileNode(module, cache, &node, fRetT, constPool, bc, scopes, log);
+                    bc.push_back({bc::ReadMember});
+                    pushToBc<uint64_t>(bc, getSizeOfType(val.type, val.pointerDepth, cache->structs));
+                    return {{val.type, val.pointerDepth}, ReadTmp, 0};
+                }
                 }
             };
-            auto [t,type,offset]=walkTree(*node,walkTree);
-            switch(type)
+            auto [t, type, offset] = walkTree(*node, walkTree);
+            switch (type)
             {
-                case ReadAbs:
+            case ReadAbs:
                 bc.push_back({bc::Push64});
-                pushToBc<uint64_t>(bc,offset);
+                pushToBc<uint64_t>(bc, offset);
                 bc.push_back({bc::AddI});
                 bc.push_back({bc::ReadAbs});
                 break;
-                case ReadRel:
+            case ReadRel:
                 bc.push_back({bc::ReadRel});
-                pushToBc<uint64_t>(bc,offset);
+                pushToBc<uint64_t>(bc, offset);
                 break;
-                case ReadTmp:
-                pushToBc<uint64_t>(bc,offset);
+            case ReadTmp:
+                pushToBc<uint64_t>(bc, offset);
             }
-            pushToBc<uint64_t>(bc,getSizeOfType(t.index,t.pointerDepth,cache->structs));
-            return {t.index,t.pointerDepth};
+            pushToBc<uint64_t>(bc, getSizeOfType(t.index, t.pointerDepth, cache->structs));
+            return {t.index, t.pointerDepth};
             // auto &root = node->children[0];
             // int64_t offset = 0;
             // auto rootRes = compileNode(module, cache, &root, fRetT, constPool, bc, scopes, log);
@@ -804,6 +849,16 @@ namespace vwa
             // pushToBc<uint64_t>(bc, resultSize);
             // return rootRes;
             // // TODO: reduce instruction count
+        }
+        case Node::Type::Break:
+        {
+            bc.push_back({bc::Break});
+            pushToBc<uint64_t>(bc, 0);
+        }
+        case Node::Type::Continue:
+        {
+            bc.push_back({bc::Continue});
+            pushToBc<uint64_t>(bc, 0);
         }
         }
 
