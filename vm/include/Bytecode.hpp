@@ -113,4 +113,76 @@ namespace vwa::bc
         uint8_t value;
         BcInstruction instruction;
     };
+
+    size_t getInstructionSize(bc::BcInstruction instr)
+    {
+        using namespace bc;
+        switch (instr)
+        {
+        case ReadMember:
+            return 25;
+
+        case CallFunc:
+        case JumpFuncRel:
+        case JumpFuncAbs:
+        case JumpFFI:
+        case ReadRel:
+        case WriteRel:
+            return 17;
+        case JumpRel:
+        case JumpRelIfFalse:
+        case JumpRelIfTrue:
+        case JumpFPtr:
+        case Return:
+        case Push:
+        case Pop:
+        case Push64:
+        case Dup:
+        case ReadAbs:
+        case WriteAbs:
+        case AbsOf:
+            return 9;
+        case Push8:
+            return 2;
+        case Break:
+        case Continue:
+        case Exit:
+        case AddI:
+        case SubI:
+        case MulI:
+        case DivI:
+        case ModI:
+        case PowerI:
+        case AddF:
+        case SubF:
+        case MulF:
+        case DivF:
+        case PowerF:
+        case NegF:
+        case FtoI:
+        case FtoC:
+        case ItoC:
+        case ItoF:
+        case CtoI:
+        case CtoF:
+        case And:
+        case Or:
+        case Not:
+        case GreaterThanF:
+        case LessThanF:
+        case GreaterThanOrEqualF:
+        case LessThanOrEqualF:
+        case EqualF:
+        case NotEqualF:
+        case GreaterThanI:
+        case LessThanI:
+        case GreaterThanOrEqualI:
+        case LessThanOrEqualI:
+        case EqualI:
+        case NotEqualI:
+        case LastInstr:
+            return 1;
+        }
+    }
+
 };
