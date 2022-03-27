@@ -1,9 +1,101 @@
 #include <GenerateByteCode.hpp>
+
 // FIXME: if any code for casting is inserted, I NEED to make sure there are no problems with reads relative to the instruction ptr. I'll need that should I ever implement statement expressions.
 //  TODO: assert, at some point that primitive types are not overriden
 //  TODO: output more useful format and use it for optimization
 namespace vwa
 {
+    size_t getInstructionSize(bc::BcInstruction instr)
+    {
+        using namespace bc;
+        switch (instr)
+        {
+        case ReadMember:
+            return 25;
+
+        case CallFunc:
+        case JumpFuncRel:
+        case JumpFuncAbs:
+        case JumpFFI:
+        case ReadRel:
+        case WriteRel:
+            return 17;
+        case JumpRel:
+        case JumpRelIfFalse:
+        case JumpRelIfTrue:
+        case JumpFPtr:
+        case Return:
+        case Push:
+        case Pop:
+        case Push64:
+        case Dup:
+        case ReadAbs:
+        case WriteAbs:
+        case AbsOf:
+            return 9;
+        case Push8:
+            return 2;
+        case Break:
+        case Continue:
+        case Exit:
+        case AddI:
+        case SubI:
+        case MulI:
+        case DivI:
+        case ModI:
+        case PowerI:
+        case AddF:
+        case SubF:
+        case MulF:
+        case DivF:
+        case PowerF:
+        case NegF:
+        case FtoI:
+        case FtoC:
+        case ItoC:
+        case ItoF:
+        case CtoI:
+        case CtoF:
+        case And:
+        case Or:
+        case Not:
+        case GreaterThanF:
+        case LessThanF:
+        case GreaterThanOrEqualF:
+        case LessThanOrEqualF:
+        case EqualF:
+        case NotEqualF:
+        case GreaterThanI:
+        case LessThanI:
+        case GreaterThanOrEqualI:
+        case LessThanOrEqualI:
+        case EqualI:
+        case NotEqualI:
+        case LastInstr:
+            return 1;
+        }
+    }
+
+    // This function inserts the token at the specified position and offsets all following instructions.
+    // The instruction inserted is not offset. this assumes all following instructions are complete, or at the very least have enough space allocated
+    //TODO: make sure this does not cause problems with jumps before this(example an if which jumps past the body if the condition is false)
+    void bcInsert(std::vector<bc::BcToken> &bc, const size_t pos)
+    {
+        bc.insert(bc.begin()+pos, bc::BcToken{});
+        for (size_t i = pos+1; i < bc.size(); i+=getInstructionSize(bc[i].instruction))
+        {
+            using namespace bc;
+            switch(bc[i].instruction)
+            {
+                case JumpRel:
+                case JumpRelIfFalse:
+                case JumpRelIfTrue:
+                case JumpFuncRel:
+                ++*reinterpret_cast<int64_t*>(&bc[i+1]);
+                continue;
+            }
+        }
+    }
 
     auto &getMember(const std::string &name, const size_t type, const Cache &cache)
     {
@@ -720,8 +812,24 @@ namespace vwa
                 if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
                     bc.push_back({*instr});
             }
-            bc.push_back({bc::CallFunc});
-            pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
+            //There are two reasons for this: 
+            //First, it might speed up the linker by having to do less lookups, but I am not sure about that
+            //Two, it means I can push back development of the linker
+            if (func.finished && func.internal)
+            {
+                bc.push_back({bc::JumpFuncRel});
+                pushToBc<int64_t>(bc, func.address - bc.size() + 1);
+            }
+            else if (auto f = std::get<Linker::Module::Symbol::Function>(func.symbol->data); f.type == Linker::Module::Symbol::Function::Type::External)
+            {
+                bc.push_back({bc::JumpFFI});
+                pushToBc<size_t>(bc, f.impl.index);
+            }
+            else
+            {
+                bc.push_back({bc::CallFunc});
+                pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
+            }
             pushToBc<uint64_t>(bc, argSize);
             return {func.returnType.type, func.returnType.pointerDepth};
         }
