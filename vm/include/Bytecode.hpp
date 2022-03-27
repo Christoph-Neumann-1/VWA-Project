@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 
 // TODO: add a way to handle chars, either by adding the type, or by adding a function in the standard library
 // TODO: consider adding noop
@@ -114,7 +115,8 @@ namespace vwa::bc
         BcInstruction instruction;
     };
 
-    size_t getInstructionSize(bc::BcInstruction instr)
+    //This will be called quite often so it makes sense to declare it in a header so it can be inlined
+   inline size_t getInstructionSize(bc::BcInstruction instr)
     {
         using namespace bc;
         switch (instr)
@@ -183,6 +185,6 @@ namespace vwa::bc
         case LastInstr:
             return 1;
         }
+        throw 0;//This should not be possible, but gcc won't stop complaining
     }
-
 };
