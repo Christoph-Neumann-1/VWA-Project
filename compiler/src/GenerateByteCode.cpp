@@ -7,20 +7,20 @@ namespace vwa
 {
     // This function inserts the token at the specified position and offsets all following instructions.
     // The instruction inserted is not offset. this assumes all following instructions are complete, or at the very least have enough space allocated
-    //TODO: make sure this does not cause problems with jumps before this(example an if which jumps past the body if the condition is false)
+    // TODO: make sure this does not cause problems with jumps before this(example an if which jumps past the body if the condition is false)
     void bcInsert(std::vector<bc::BcToken> &bc, const size_t pos)
     {
-        bc.insert(bc.begin()+pos, bc::BcToken{});
-        for (size_t i = pos+1; i < bc.size(); i+=getInstructionSize(bc[i].instruction))
+        bc.insert(bc.begin() + pos, bc::BcToken{});
+        for (size_t i = pos + 1; i < bc.size(); i += getInstructionSize(bc[i].instruction))
         {
             using namespace bc;
-            switch(bc[i].instruction)
+            switch (bc[i].instruction)
             {
-                case JumpRel:
-                case JumpRelIfFalse:
-                case JumpRelIfTrue:
-                case JumpFuncRel:
-                ++*reinterpret_cast<int64_t*>(&bc[i+1]);
+            case JumpRel:
+            case JumpRelIfFalse:
+            case JumpRelIfTrue:
+            case JumpFuncRel:
+                ++*reinterpret_cast<int64_t *>(&bc[i + 1]);
                 continue;
             }
         }
@@ -279,6 +279,9 @@ namespace vwa
             return {PrimitiveTypes::F64};
         case Node::Type::Block:
         {
+
+            if (!node->children.size())
+                return {};
             auto scope = generateBlockScope(*node, *cache, log, scopes.back().size + scopes.back().offset);
             scopes.push_back(scope);
             if (scope.size)
@@ -741,9 +744,9 @@ namespace vwa
                 if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
                     bc.push_back({*instr});
             }
-            //There are two reasons for this: 
-            //First, it might speed up the linker by having to do less lookups, but I am not sure about that
-            //Two, it means I can push back development of the linker
+            // There are two reasons for this:
+            // First, it might speed up the linker by having to do less lookups, but I am not sure about that
+            // Two, it means I can push back development of the linker
             if (func.finished && func.internal)
             {
                 bc.push_back({bc::JumpFuncRel});
@@ -901,45 +904,45 @@ namespace vwa
         }
         case Node::Type::For:
         {
-            //A for statement starts by creating a scope for the loop variable.
+            // A for statement starts by creating a scope for the loop variable.
             Scope firstScope{0, scopes.back().size + scopes.back().offset};
-            firstScope.variables.insert({std::get<std::string>(node->children[0].children[0].value),{firstScope.offset,std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth}});
+            firstScope.variables.insert({std::get<std::string>(node->children[0].children[0].value), {firstScope.offset, std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth}});
             firstScope.size += getSizeOfType(std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth, cache->structs);
             scopes.push_back(std::move(firstScope));
-            //Then the initializer is compiled.
-            discard(compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log),bc,cache);
-            //Following that the condition is compiled and it's address is stored for jumping back later.
+            // Then the initializer is compiled.
+            discard(compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log), bc, cache);
+            // Following that the condition is compiled and it's address is stored for jumping back later.
             auto condAddr = bc.size();
-            auto cond= compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            if(auto instr=typeCast(I64,0,cond.type,cond.pointerDepth,log))
+            auto cond = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(I64, 0, cond.type, cond.pointerDepth, log))
                 bc.push_back({*instr});
             bc.push_back({bc::JumpRelIfFalse});
             auto jumpAddr = bc.size();
-            pushToBc<int64_t>(bc, 0);//This is just a placeholder
-            //Then the main body is compiled, this does not necessarily require a new scope, but better safe than sorry
+            pushToBc<int64_t>(bc, 0); // This is just a placeholder
+            // Then the main body is compiled, this does not necessarily require a new scope, but better safe than sorry
             scopes.push_back({0, scopes.back().size + scopes.back().offset});
             compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
             scopes.pop_back();
-            //Incrementing happens at the end, followed by an unconditional jump back.
-            discard(compileNode(module, cache, &node->children[2], fRetT, constPool, bc, scopes, log),bc,cache);
+            // Incrementing happens at the end, followed by an unconditional jump back.
+            discard(compileNode(module, cache, &node->children[2], fRetT, constPool, bc, scopes, log), bc, cache);
             scopes.pop_back();
             bc.push_back({bc::JumpRel});
-            pushToBc<int64_t>(bc, condAddr-bc.size()+1);
-            //Now that the end position is know, update the jump instruction.
-            *reinterpret_cast<int64_t*>(&bc[jumpAddr]) = bc.size()-jumpAddr+1;
-            return {0,0};
+            pushToBc<int64_t>(bc, condAddr - bc.size() + 1);
+            // Now that the end position is know, update the jump instruction.
+            *reinterpret_cast<int64_t *>(&bc[jumpAddr]) = bc.size() - jumpAddr + 1;
+            return {0, 0};
         }
         case Node::Type::LessThan:
         {
-            //TODO: transfer from laptop
+            // TODO: transfer from laptop
         }
         case Node::Type::Cast:
         {
-            auto expr=compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            auto type=std::get<Node::VarTypeCached>(node->children[1].value);
-            if(auto instr=typeCast(type.index,type.pointerDepth,expr.type,expr.pointerDepth,log))
+            auto expr = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto type = std::get<Node::VarTypeCached>(node->children[1].value);
+            if (auto instr = typeCast(type.index, type.pointerDepth, expr.type, expr.pointerDepth, log))
                 bc.push_back({*instr});
-            return {type.index,type.pointerDepth};
+            return {type.index, type.pointerDepth};
         }
         }
 
