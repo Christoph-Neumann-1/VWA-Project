@@ -339,11 +339,11 @@ namespace vwa
     [[nodiscard]] static Node parseUnary(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parsePrimary(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos);
-    [[nodiscard]] static Node parseId(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Node parseId(Node root,const std::vector<Token> &tokens, size_t &pos);
 
     [[nodiscard]] static Node parseExpression(const std::vector<Token> &tokens, size_t &pos)
     {
-        return parseId(tokens, pos);
+        return parseLogical(tokens, pos);
     }
 
     [[nodiscard]] static Node parseLogical(const std::vector<Token> &tokens, size_t &pos)
@@ -450,7 +450,7 @@ namespace vwa
         {
             auto line = tokens[pos].line;
             //parseId should be fine here as I don't want temporary values anyways. That does not mean, however there won't be any issues.
-            return {Node::Type::AddressOf, {}, {parseId(tokens, ++pos)}, line};
+            return {Node::Type::AddressOf, {}, {parseId(parseLogical(tokens,++pos),tokens, pos)}, line};
         }
         default:
             return parsePrimary(tokens, pos);
@@ -490,7 +490,7 @@ namespace vwa
             }
             else
                 id.name = name;
-            return {Node::Type::Variable,id,{},line};
+            return parseId({Node::Type::Variable,id,{},line},tokens,pos);
         }
             // return parseId(tokens, pos);
         case Token::Type::lparen:
@@ -500,7 +500,7 @@ namespace vwa
             {
                 throw std::runtime_error("Expected ')'");
             }
-            return result;
+            return parseId(std::move(result),tokens,pos);
         }
         case Token::Type::size_of:
         {
@@ -515,7 +515,7 @@ namespace vwa
     // Function pointers require a rewrite. Calls should not be handled in here
     // FIXME: not generic enough, pass root in, it may be the result of some other op
     // TODO: decide if member access works better when implemented recursively or as a list
-    [[nodiscard]] static Node parseId(const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static Node parseId(Node root,const std::vector<Token> &tokens, size_t &pos)
     {
         // auto line = tokens[pos].line;
         // auto name= std::get<std::string>(tokens[pos++].value);
@@ -529,7 +529,7 @@ namespace vwa
         // else
         //     id.name = name;
         // Node root{Node::Type::Variable, id, {}, line};
-        auto root = parseLogical(tokens, pos);
+        // auto root = parseLogical(tokens, pos);
         while (1)
         {
             switch (tokens[pos].type)
