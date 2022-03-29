@@ -150,7 +150,7 @@ namespace vwa
             result.returnType = parseType(tokens, pos);
         }
         else
-            result.returnType = {"void", 0};
+            result.returnType = {{"void"}, 0};
         result.body = parseStatement(tokens, pos);
         return result;
     }
