@@ -1,6 +1,6 @@
 #include <Parser.hpp>
 // TODO: remove the need for import statements by discovering which modules are needed
-
+// TODO: if a block does not declare a variable I can lift it to the parent scope
 namespace vwa
 {
     // TODO: allow statements where expressions are expected
@@ -322,11 +322,13 @@ namespace vwa
         auto line = tokens[pos].line;
         if (tokens[++pos].type != Token::Type::lparen)
             throw std::runtime_error("Expected ( after for");
-        auto init = parseStatement(tokens, pos);
+        auto init = parseStatement(tokens, ++pos);
         auto cond = parseExpression(tokens, pos);
-        if (tokens[pos].type != Token::Type::rparen)
+        if (tokens[pos].type != Token::Type::semicolon)
             throw std::runtime_error("Expected ) after for condition");
         auto step = parseStatement(tokens, ++pos);
+        if (tokens[pos].type != Token::Type::rparen)
+            throw std::runtime_error("Expected ) after for step");
         auto body = parseStatement(tokens, ++pos);
         return {Node::Type::For, {}, {std::move(init), std::move(cond), std::move(step), std::move(body)}, line};
     }
@@ -337,9 +339,10 @@ namespace vwa
     [[nodiscard]] static Node parseMulDiv(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parsePower(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseUnary(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Node parseCast(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parsePrimary(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos);
-    [[nodiscard]] static Node parseId(Node root,const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Node parseId(Node root, const std::vector<Token> &tokens, size_t &pos);
 
     [[nodiscard]] static Node parseExpression(const std::vector<Token> &tokens, size_t &pos)
     {
@@ -449,13 +452,26 @@ namespace vwa
         case Token::Type::ampersand:
         {
             auto line = tokens[pos].line;
-            //parseId should be fine here as I don't want temporary values anyways. That does not mean, however there won't be any issues.
-            return {Node::Type::AddressOf, {}, {parseId(parseLogical(tokens,++pos),tokens, pos)}, line};
+            // parseId should be fine here as I don't want temporary values anyways. That does not mean, however there won't be any issues.
+            return {Node::Type::AddressOf, {}, {parseId(parseLogical(tokens, ++pos), tokens, pos)}, line};
         }
         default:
-            return parsePrimary(tokens, pos);
+            return parseCast(tokens, pos);
         }
     }
+
+    // I intentionally forbode chaining casts, if for some obscure reason you want to do that, fine, but please use parentheses
+    [[nodiscard]] static Node parseCast(const std::vector<Token> &tokens, size_t &pos)
+    {
+        auto what=parsePrimary(tokens, pos);
+        if(tokens[pos].type==Token::Type::cast)
+        {
+            auto line=tokens[pos].line;
+            return {Node::Type::Cast,{},{std::move(what),{Node::Type::Type,{parseType(tokens,++pos)},{},line}},line};
+        }
+        return what;
+    }
+
     // FIXME: I forgot testing parantheses
     [[nodiscard]] static Node parsePrimary(const std::vector<Token> &tokens, size_t &pos)
     {
@@ -490,7 +506,7 @@ namespace vwa
             }
             else
                 id.name = name;
-            return parseId({Node::Type::Variable,id,{},line},tokens,pos);
+            return parseId({Node::Type::Variable, id, {}, line}, tokens, pos);
         }
             // return parseId(tokens, pos);
         case Token::Type::lparen:
@@ -500,7 +516,7 @@ namespace vwa
             {
                 throw std::runtime_error("Expected ')'");
             }
-            return parseId(std::move(result),tokens,pos);
+            return parseId(std::move(result), tokens, pos);
         }
         case Token::Type::size_of:
         {
@@ -515,7 +531,7 @@ namespace vwa
     // Function pointers require a rewrite. Calls should not be handled in here
     // FIXME: not generic enough, pass root in, it may be the result of some other op
     // TODO: decide if member access works better when implemented recursively or as a list
-    [[nodiscard]] static Node parseId(Node root,const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static Node parseId(Node root, const std::vector<Token> &tokens, size_t &pos)
     {
         // auto line = tokens[pos].line;
         // auto name= std::get<std::string>(tokens[pos++].value);
@@ -538,7 +554,7 @@ namespace vwa
                 root = parseFunctionCall(std::move(root), tokens, pos);
                 break;
             case Token::Type::arrow_:
-                root={Node::Type::Dereference,{},{std::move(root)},root.line};
+                root = {Node::Type::Dereference, {}, {std::move(root)}, root.line};
                 [[fallthrough]];
             case Token::Type::dot:
                 if (tokens[++pos].type != Token::Type::id)

@@ -891,11 +891,55 @@ namespace vwa
         {
             bc.push_back({bc::Break});
             pushToBc<uint64_t>(bc, 0);
+            return {};
         }
         case Node::Type::Continue:
         {
             bc.push_back({bc::Continue});
             pushToBc<uint64_t>(bc, 0);
+            return {};
+        }
+        case Node::Type::For:
+        {
+            //A for statement starts by creating a scope for the loop variable.
+            Scope firstScope{0, scopes.back().size + scopes.back().offset};
+            firstScope.variables.insert({std::get<std::string>(node->children[0].children[0].value),{firstScope.offset,std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth}});
+            firstScope.size += getSizeOfType(std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth, cache->structs);
+            scopes.push_back(std::move(firstScope));
+            //Then the initializer is compiled.
+            discard(compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log),bc,cache);
+            //Following that the condition is compiled and it's address is stored for jumping back later.
+            auto condAddr = bc.size();
+            auto cond= compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
+            if(auto instr=typeCast(I64,0,cond.type,cond.pointerDepth,log))
+                bc.push_back({*instr});
+            bc.push_back({bc::JumpRelIfFalse});
+            auto jumpAddr = bc.size();
+            pushToBc<int64_t>(bc, 0);//This is just a placeholder
+            //Then the main body is compiled, this does not necessarily require a new scope, but better safe than sorry
+            scopes.push_back({0, scopes.back().size + scopes.back().offset});
+            compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
+            scopes.pop_back();
+            //Incrementing happens at the end, followed by an unconditional jump back.
+            discard(compileNode(module, cache, &node->children[2], fRetT, constPool, bc, scopes, log),bc,cache);
+            scopes.pop_back();
+            bc.push_back({bc::JumpRel});
+            pushToBc<int64_t>(bc, condAddr-bc.size()+1);
+            //Now that the end position is know, update the jump instruction.
+            *reinterpret_cast<int64_t*>(&bc[jumpAddr]) = bc.size()-jumpAddr+1;
+            return {0,0};
+        }
+        case Node::Type::LessThan:
+        {
+            //TODO: transfer from laptop
+        }
+        case Node::Type::Cast:
+        {
+            auto expr=compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto type=std::get<Node::VarTypeCached>(node->children[1].value);
+            if(auto instr=typeCast(type.index,type.pointerDepth,expr.type,expr.pointerDepth,log))
+                bc.push_back({*instr});
+            return {type.index,type.pointerDepth};
         }
         }
 
