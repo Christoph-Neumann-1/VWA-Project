@@ -174,16 +174,25 @@ namespace vwa
         scopes.push_back(scope);
         funcData.address = bc.size();
         funcData.finished = true; // Indicates that the adress is final.
-        // TODO: store the offsets somewhere What was I thinking?
+        // TODO: store the offsets somewhere. What was I thinking?
         // FIXME: consider all outcomes, like having a value at the end of a void function and such
         auto res = compileNode(module, cache, &func.body, NodeResult{funcData.returnType.type, funcData.returnType.pointerDepth}, constPool, bc, scopes, log);
-        if (res.type != PrimitiveTypes::Void || res.pointerDepth)
+        if (res.type || res.pointerDepth)
         {
-            log << Logger::Info << "Function body evaluates to value, adding implicit return\n";
-            if (auto instr = typeCast(funcData.returnType.type, funcData.returnType.pointerDepth, res.type, res.pointerDepth, log); instr)
-                bc.push_back({*instr});
+            if (!funcData.returnType.type && !funcData.returnType.pointerDepth)
+                discard(res, bc, cache);
+            else
+            {
+                log << Logger::Info << "Function body evaluates to value, adding implicit return\n";
+                if (auto instr = typeCast(funcData.returnType.type, funcData.returnType.pointerDepth, res.type, res.pointerDepth, log); instr)
+                    bc.push_back({*instr});
+            }
         }
-        // Even if there is no implicit return, add this to make sure the function returns at all
+        else if (funcData.returnType.type || funcData.returnType.pointerDepth)
+        {
+            log << "Function requires a return value but none was provided\n";
+            throw std::runtime_error("Function requires a return value but none was provided");
+        }
         bc.push_back(bc::BcToken{bc::Return});
         pushToBc(bc, uint64_t{getSizeOfType(res.type, res.pointerDepth, cache->structs)});
     }
@@ -943,6 +952,17 @@ namespace vwa
             if (auto instr = typeCast(type.index, type.pointerDepth, expr.type, expr.pointerDepth, log))
                 bc.push_back({*instr});
             return {type.index, type.pointerDepth};
+        }
+        case Node::Type::TypePun:
+        {
+            auto expr = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto resT = std::get<Node::VarTypeCached>(node->children[1].value);
+            if (getSizeOfType(expr.type, expr.pointerDepth, cache->structs) != getSizeOfType(resT.index, resT.pointerDepth, cache->structs))
+            {
+                log << Logger::Error << "Failed to type pun, Types must be of the same size\n";
+                throw std::runtime_error("Failed to type pun, Types must be of the same size");
+            }
+            return {resT.index, resT.pointerDepth};
         }
         }
 

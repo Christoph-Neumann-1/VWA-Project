@@ -63,6 +63,7 @@ namespace vwa
             MemberAccess,
             SizeOf,
             Cast,
+            TypePun,
         };
         Type type = Type::Unassigned;
         struct VarType

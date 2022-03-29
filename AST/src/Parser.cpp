@@ -463,13 +463,22 @@ namespace vwa
     // I intentionally forbode chaining casts, if for some obscure reason you want to do that, fine, but please use parentheses
     [[nodiscard]] static Node parseCast(const std::vector<Token> &tokens, size_t &pos)
     {
-        auto what=parsePrimary(tokens, pos);
-        if(tokens[pos].type==Token::Type::cast)
+        auto what = parsePrimary(tokens, pos);
+        switch (tokens[pos].type)
         {
-            auto line=tokens[pos].line;
-            return {Node::Type::Cast,{},{std::move(what),{Node::Type::Type,{parseType(tokens,++pos)},{},line}},line};
+        case Token::Type::cast:
+        {
+            auto line = tokens[pos].line;
+            return {Node::Type::Cast, {}, {std::move(what), {Node::Type::Type, {parseType(tokens, ++pos)}, {}, line}}, line};
         }
-        return what;
+        case Token::Type::type_pun:
+        {
+            auto line = tokens[pos].line;
+            return {Node::Type::TypePun, {}, {std::move(what), {Node::Type::Type, {parseType(tokens, ++pos)}, {}, line}}, line};
+        }
+        default:
+            return what;
+        }
     }
 
     // FIXME: I forgot testing parantheses

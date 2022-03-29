@@ -66,8 +66,9 @@ namespace vwa
 
             eof,
 
-            // Not implemented yet
             cast,
+            type_pun,
+            // Not implemented yet
             nullptr_,
             arrow_,
             const_expr,
@@ -104,7 +105,8 @@ namespace vwa
         {"sizeof", Token::Type::size_of},
         {"func", Token::Type::func_},
         {"to", Token::Type::cast},
-        {"nullptr",Token::Type::nullptr_},
+        {"as", Token::Type::type_pun},
+        {"nullptr", Token::Type::nullptr_},
     };
 
     // The reference is not const because I can't be bothered to implement a const_iterator
