@@ -52,17 +52,16 @@ namespace vwa
             compileFunc(mod, cache, func, constants, bc, log);
 
         auto bcSize = bc.size();
-        bc.reserve(bc.size() + constants.size());
+        bc.resize(bcSize + constants.size());
         if (!bcSize)
         {
             log << Logger::Warning << "No code in module\n";
             return;
         }
-        bc.reserve(bcSize + constants.size());
         // FIXME: offset all later function references
-        for (auto i = bcSize - 1; i + 1 > constants.size(); --i)
+        for (int64_t i = bcSize - 1; i  >= 0&&constants.size(); --i)
         {
-            bc[i] = bc[i - constants.size()];
+            bc[i+constants.size()] = bc[i];
         }
         {
             int i = constants.size() - 1, j = 0;

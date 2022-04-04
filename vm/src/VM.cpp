@@ -10,7 +10,7 @@ namespace vwa
     // TODO: proper error handling
     VM::ExitCode VM::exec(const bc::BcToken *bc, uint8_t *basePtr)
     {
-        bc += 105;
+        bc += 105+7;
         if (!basePtr)
         {
             basePtr = stack.data;

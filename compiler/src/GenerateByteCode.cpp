@@ -989,11 +989,11 @@ namespace vwa
         case Node::Type::LiteralS:
         {
             auto &str = std::get<std::string>(node->value);
+            pushToConst<int64_t>(constPool, 0);
             for (auto i = str.size() - 1;i+1 >= 1;--i)
                 pushToConst<int64_t>(constPool, str[i]);
-            constPool.push_back('\0');
             bc.push_back({bc::AbsOfConst});
-            pushToBc<uint64_t>(bc, -bc.size()-constPool.size() - str.size()*8);
+            pushToBc<uint64_t>(bc, -bc.size()-constPool.size()+1);
             return {I64, 1};//Should this be a char instead?
         }
         }

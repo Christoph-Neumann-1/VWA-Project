@@ -206,7 +206,7 @@ void printChar(int64_t c)
 }
 void print(int64_t *str)
 {
-    while (*str)
+    while (*str!='\0')
         putchar(*str++);
 }
 ExportFunction(print);
