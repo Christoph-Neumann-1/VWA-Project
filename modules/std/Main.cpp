@@ -204,6 +204,12 @@ void printChar(int64_t c)
 {
     std::putchar(c);
 }
+void print(int64_t *str)
+{
+    while (*str)
+        putchar(*str++);
+}
+ExportFunction(print);
 ExportFunction(readChar);
 ExportFunction(printChar);
 

@@ -10,6 +10,7 @@ namespace vwa
     // TODO: proper error handling
     VM::ExitCode VM::exec(const bc::BcToken *bc, uint8_t *basePtr)
     {
+        bc += 105;
         if (!basePtr)
         {
             basePtr = stack.data;
@@ -181,6 +182,10 @@ namespace vwa
             };
             case AbsOf:
                 stack.push<uint64_t>(reinterpret_cast<intptr_t>(basePtr) + *reinterpret_cast<const uint64_t *>((bc + 1)));
+                bc += 9;
+                continue;
+            case AbsOfConst:
+                stack.push<uint64_t>(reinterpret_cast<uint64_t>( bc+ *reinterpret_cast<const int64_t *>((bc + 1))));
                 bc += 9;
                 continue;
             case AddI:

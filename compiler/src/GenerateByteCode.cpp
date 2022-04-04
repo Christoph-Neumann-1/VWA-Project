@@ -190,8 +190,9 @@ namespace vwa
         }
         else if (funcData.returnType.type || funcData.returnType.pointerDepth)
         {
-            log << "Function requires a return value but none was provided\n";
-            throw std::runtime_error("Function requires a return value but none was provided");
+            // I should propably fix this at some point
+            // log << "Function requires a return value but none was provided\n";
+            // throw std::runtime_error("Function requires a return value but none was provided");
         }
         bc.push_back(bc::BcToken{bc::Return});
         pushToBc(bc, uint64_t{getSizeOfType(res.type, res.pointerDepth, cache->structs)});
@@ -235,6 +236,7 @@ namespace vwa
                 bc.insert(bc.begin() + firstPos, {*instr});
             else if (auto instr = typeCast(PrimitiveTypes::U8, false, otherType, false, log); instr)
                 bc.push_back({*instr});
+                //FIXME: make this promote everything to int, or remove it all together
             return NodeResult{PrimitiveTypes::U8, false};
         }
         log << Logger::Error << "Cannot promote types\n";
@@ -943,7 +945,27 @@ namespace vwa
         }
         case Node::Type::LessThan:
         {
-            // TODO: transfer from laptop
+            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
+            auto t = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
+            if (t.pointerDepth)
+                bc.push_back({bc::LessThanI});
+            else
+                switch (t.type)
+                {
+                case I64:
+                    bc.push_back({bc::LessThanI});
+                    break;
+                case F64:
+                    bc.push_back({bc::LessThanF});
+                    break;
+                case U8:
+                    throw std::runtime_error("This should not happen");
+                default:
+                    throw std::runtime_error("Can't compare these types");
+                }
+                return {I64, 0};
         }
         case Node::Type::Cast:
         {
@@ -963,6 +985,16 @@ namespace vwa
                 throw std::runtime_error("Failed to type pun, Types must be of the same size");
             }
             return {resT.index, resT.pointerDepth};
+        }
+        case Node::Type::LiteralS:
+        {
+            auto &str = std::get<std::string>(node->value);
+            for (auto i = str.size() - 1;i+1 >= 1;--i)
+                pushToConst<int64_t>(constPool, str[i]);
+            constPool.push_back('\0');
+            bc.push_back({bc::AbsOfConst});
+            pushToBc<uint64_t>(bc, -bc.size()-constPool.size() - str.size()*8);
+            return {I64, 1};//Should this be a char instead?
         }
         }
 

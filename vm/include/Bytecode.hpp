@@ -60,7 +60,8 @@ namespace vwa::bc
         ReadMember, // Reads struct member, Args: u64 struct size, u64 member offset, u64 nBytes
         // TODO: stack pointer relative read/write
         AbsOf, // Convert relative adress given in bc to absolute adress.
-
+        AbsOfConst,//Convert address relative to instruction pointer to absolute address. Args: i64 offset
+        
         // Character types don't get their own instructions, they are just converted to integers.
         //  TODO: unsigned types
         //  TODO: consider negation instructions
@@ -143,6 +144,7 @@ namespace vwa::bc
         case ReadAbs:
         case WriteAbs:
         case AbsOf:
+        case AbsOfConst:
             return 9;
         case Push8:
             return 2;

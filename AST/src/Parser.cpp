@@ -162,6 +162,11 @@ namespace vwa
         result.name.name = std::get<std::string>(tokens[pos].value);
         for (++pos; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
             result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
+        if (result.name.name == "string")
+        {
+            result.name.name = "int";
+            result.pointerDepth++;
+        }
         return result;
     }
 

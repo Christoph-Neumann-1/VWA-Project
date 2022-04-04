@@ -17,6 +17,16 @@ namespace vwa
         }
     }
 
+    template <typename T>
+    void pushToConst(std::vector<uint8_t> &bc, T value)
+    {
+        uint8_t *data = reinterpret_cast<uint8_t *>(&value);
+        for (size_t i = sizeof(T)-1; i+1 >=1; i--)
+        {
+            bc.push_back(data[i]);
+        }   
+    }
+
     // TODO: I really shouldn't have so many structs with the same members.
     struct NodeResult
     {
@@ -48,6 +58,8 @@ namespace vwa
             log << Logger::Warning << "No code in module\n";
             return;
         }
+        bc.reserve(bcSize + constants.size());
+        // FIXME: offset all later function references
         for (auto i = bcSize - 1; i + 1 > constants.size(); --i)
         {
             bc[i] = bc[i - constants.size()];
