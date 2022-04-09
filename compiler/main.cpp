@@ -141,12 +141,28 @@ int main(int argc, char **argv)
     //     8,0,0,0,
     //     0,0,0,0,};
     log << Logger::Info << "Executing main function\n";
+    log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
     auto begin = std::chrono::high_resolution_clock::now();
     auto res = vm.exec(main);
     auto end = std::chrono::high_resolution_clock::now();
-    log << Logger::Info << "Main function returned with status " << res.statusCode << " and return code " << (res.statusCode == VM::ExitCode::Success ? *reinterpret_cast<int64_t *>(vm.stack.top - 8) : res.exitCode) << "\n";
+
+    log << "\n\n"
+        << Logger::Info << ColorI("END PROGRAM OUTPUT\n");
+    log << (res.statusCode > VM::ExitCode::Exit ? Logger::Error : Logger::Info);
+    switch (res.statusCode)
+    {
+    case VM::ExitCode::Success:
+        log << "Main function returned " << *reinterpret_cast<int64_t *>(vm.stack.top - 8);
+        break;
+    case VM::ExitCode::Exit:
+        log << "Exit was called with return code " << res.exitCode;
+        break;
+    default:
+        log << "Program terminated abnormally. Error " << res.statusCode << " Exit Code " << res.exitCode;
+    }
+    log << '\n';
+
     log << Logger::Info << "Finished execution in " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms\n";
     log << Logger::Info << "Total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - compStart).count() << "ms\n";
-    // return res.statusCode == VM::ExitCode::Success ? *reinterpret_cast<int64_t *>(vm.stack.top - 8) : res.exitCode;
-    return 0;
+    return res.statusCode == VM::ExitCode::Success ? *reinterpret_cast<int64_t *>(vm.stack.top - 8) : -1;
 }
