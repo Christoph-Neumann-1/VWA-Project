@@ -88,9 +88,8 @@ namespace vwa
             std::vector<Symbol> exportedSymbols;
 
             std::vector<std::string> importedModules;
-            std::vector<std::string> exportedImports;
 
-            std::unordered_map<Identifier, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present.
+            std::unordered_map<Identifier, Symbol *> symbols; // Mainly used for looking up during compile time and to ensure no name collisions are present. TODO: replace by global table
 
             // In theory it would be enough to just store the function names, but this way I can also make sure that the defintions are still the same at runtime.
             std::vector<std::variant<Symbol, Symbol *>> requiredSymbols; // This table is generated at compile time and used by the linker for fast lookup.

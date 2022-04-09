@@ -21,10 +21,10 @@ namespace vwa
     void pushToConst(std::vector<uint8_t> &bc, T value)
     {
         uint8_t *data = reinterpret_cast<uint8_t *>(&value);
-        for (size_t i = sizeof(T)-1; i+1 >=1; i--)
+        for (size_t i = sizeof(T) - 1; i + 1 >= 1; i--)
         {
             bc.push_back(data[i]);
-        }   
+        }
     }
 
     // TODO: I really shouldn't have so many structs with the same members.
@@ -59,9 +59,9 @@ namespace vwa
             return;
         }
         // FIXME: offset all later function references
-        for (int64_t i = bcSize - 1; i  >= 0&&constants.size(); --i)
+        for (int64_t i = bcSize - 1; i >= 0 && constants.size(); --i)
         {
-            bc[i+constants.size()] = bc[i];
+            bc[i + constants.size()] = bc[i];
         }
         {
             int i = constants.size() - 1, j = 0;
@@ -70,6 +70,12 @@ namespace vwa
                 bc[j++] = {constants[i--]};
             }
         }
+        //TODO: handle internal syms too
+        for (auto &s : mod->exportedSymbols)
+            if (auto f = std::get_if < 0>(&s.data))
+                f->impl.index += constants.size();
+        if(mod->main)
+            mod->main += constants.size();
         mod->data = std::move(bc);
     }
 }

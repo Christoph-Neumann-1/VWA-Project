@@ -249,9 +249,6 @@ namespace vwa
                 result.internalStructs.push_back(std::move(sym));
             }
             for (auto &import : mod.imports)
-                if (import.exported)
-                    module.exportedImports.push_back(import.name);
-                else
                     module.importedModules.push_back(import.name);
             modules.push_back((
                 {

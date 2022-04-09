@@ -136,7 +136,8 @@ namespace vwa
     void compileFunc(Linker::Module *module, Cache *cache, const Pass1Result::Function &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log)
     {
         log << Logger::Info << "Compiling function " << func.name << '\n';
-        if (func.name == "main")
+        bool main = func.name == "main";
+        if (main)
         {
             if (func.returnType.name.name != "int" || func.returnType.pointerDepth)
             {
@@ -177,6 +178,14 @@ namespace vwa
         // TODO: store the offsets somewhere. What was I thinking?
         // FIXME: consider all outcomes, like having a value at the end of a void function and such
         auto res = compileNode(module, cache, &func.body, NodeResult{funcData.returnType.type, funcData.returnType.pointerDepth}, constPool, bc, scopes, log);
+        //It doesn't really matter if this is unnecessary, there is only one main function so the impact is negligible
+        if (main && !(res.type || res.pointerDepth))
+        {
+            bc.push_back({bc::Push64});
+            pushToBc<int64_t>(bc, 0);
+            res.type = 1;
+            res.pointerDepth = 0;
+        }
         if (res.type || res.pointerDepth)
         {
             if (!funcData.returnType.type && !funcData.returnType.pointerDepth)
@@ -236,7 +245,7 @@ namespace vwa
                 bc.insert(bc.begin() + firstPos, {*instr});
             else if (auto instr = typeCast(PrimitiveTypes::U8, false, otherType, false, log); instr)
                 bc.push_back({*instr});
-                //FIXME: make this promote everything to int, or remove it all together
+            // FIXME: make this promote everything to int, or remove it all together
             return NodeResult{PrimitiveTypes::U8, false};
         }
         log << Logger::Error << "Cannot promote types\n";
@@ -965,7 +974,7 @@ namespace vwa
                 default:
                     throw std::runtime_error("Can't compare these types");
                 }
-                return {I64, 0};
+            return {I64, 0};
         }
         case Node::Type::Cast:
         {
@@ -990,11 +999,11 @@ namespace vwa
         {
             auto &str = std::get<std::string>(node->value);
             pushToConst<int64_t>(constPool, 0);
-            for (auto i = str.size() - 1;i+1 >= 1;--i)
+            for (auto i = str.size() - 1; i + 1 >= 1; --i)
                 pushToConst<int64_t>(constPool, str[i]);
             bc.push_back({bc::AbsOfConst});
-            pushToBc<uint64_t>(bc, -bc.size()-constPool.size()+1);
-            return {I64, 1};//Should this be a char instead?
+            pushToBc<uint64_t>(bc, -bc.size() - constPool.size() + 1);
+            return {I64, 1}; // Should this be a char instead?
         }
         }
 

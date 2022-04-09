@@ -36,7 +36,6 @@ namespace vwa
         struct Import
         {
             std::string name;
-            bool exported;
         };
 
         std::vector<Function> functions;

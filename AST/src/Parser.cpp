@@ -65,9 +65,11 @@ namespace vwa
             {
                 if (constexprSymbol)
                     throw std::runtime_error("Imports cannot be constexpr");
+                if(exportSymbol)
+                    throw std::runtime_error("Cannot export imports");
                 if (tokens[i + 1].type != Token::Type::string_literal)
                     throw std::runtime_error("Expected string after import");
-                result.imports.push_back({std::get<std::string>(tokens[i + 1].value), exportSymbol});
+                result.imports.push_back({std::get<std::string>(tokens[i + 1].value)});
                 exportSymbol = false;
                 i += 2;
                 break;
@@ -76,6 +78,8 @@ namespace vwa
             {
                 if (constexprSymbol)
                     throw std::runtime_error("Expected func after constexpr, got export");
+                if(exportSymbol)
+                    throw std::runtime_error("Chained exports");
                 exportSymbol = true;
                 ++i;
                 break;
