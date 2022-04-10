@@ -38,44 +38,5 @@ namespace vwa
     void
     compileFunc(Linker::Module *module, Cache *cache, const Pass1Result::Function &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log);
     NodeResult compileNode(Linker::Module *module, Cache *cache, const Node *node, const NodeResult fRetT, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, std::vector<Scope> &scopes, Logger &log);
-    inline void GenModBc(Linker::Module *mod, const Pass1Result &pass1, Cache *cache, Logger &log)
-    {
-        log << Logger::Info << "Generating bytecode\n";
-        // This is used to represent the constant pool. Its relative adress is always known, since it's at the beginning of the module.
-        // The pool grows in the opposite direction of the bytecode so as to not introduce additional complexity.
-        // It is not merged with bytecode because that would lead to loads of copying data around. Putting the data in the middle of the code is possible, but not easy to work with,
-        // this method also makes reuse possible by searching for overlapping data.
-        // Data must be pushed in reverse order
-        std::vector<uint8_t> constants{};
-        std::vector<bc::BcToken> bc;
-        for (auto &func : pass1.functions)
-            compileFunc(mod, cache, func, constants, bc, log);
-
-        auto bcSize = bc.size();
-        bc.resize(bcSize + constants.size());
-        if (!bcSize)
-        {
-            log << Logger::Warning << "No code in module\n";
-            return;
-        }
-        // FIXME: offset all later function references
-        for (int64_t i = bcSize - 1; i >= 0 && constants.size(); --i)
-        {
-            bc[i + constants.size()] = bc[i];
-        }
-        {
-            int i = constants.size() - 1, j = 0;
-            while (i + 1 > 0)
-            {
-                bc[j++] = {constants[i--]};
-            }
-        }
-        //TODO: handle internal syms too
-        for (auto &s : mod->exportedSymbols)
-            if (auto f = std::get_if < 0>(&s.data))
-                f->impl.index += constants.size();
-        if(mod->main)
-            mod->main += constants.size();
-        mod->data = std::move(bc);
-    }
+    void GenModBc(Linker::Module *mod, const Pass1Result &pass1, Cache *cache, Logger &log);
 }
