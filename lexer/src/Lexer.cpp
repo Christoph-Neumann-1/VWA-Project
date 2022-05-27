@@ -1,6 +1,7 @@
 #include <Lexer.hpp>
 #include <exception>
 #include <cctype>
+#include <algorithm>
 
 namespace vwa
 {
@@ -43,22 +44,19 @@ namespace vwa
             return std::nullopt;
         size_t len;
 
-        switch (dotFound)
-        {
-        case true:
+        if (dotFound)
         {
             Token t{Token::Type::float_literal};
             t.value = std::stod(str.data() + begin, &len);
             begin += len - 1;
             return t;
         }
-        case false:
+        else
         {
             Token t{Token::Type::int_literal};
             t.value = std::stol(str.data() + begin, &len);
             begin += len - 1;
             return t;
-        }
         }
     }
 
@@ -98,11 +96,11 @@ namespace vwa
             }
             switch (*it)
             {
-            case '\0':
-                tokens.push_back(Token{Token::Type::eof, {}});
-                return tokens;
+                // tokens.push_back(Token{Token::Type::eof, {}});
+                // return tokens;
             case '\r':
                 throw WindowsException();
+            case '\0':
             case '\n':
             case ' ':
             case '\t':

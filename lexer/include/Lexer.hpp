@@ -70,6 +70,7 @@ namespace vwa
             type_pun,
             // Not implemented yet
             nullptr_,
+            invoke, // For calling function pointers Syntax: invoke x (int, int)->int (a,b)//I might also have function pointers encode their type, but I like the explicit syntax
             arrow_,
             const_expr,
             thick_arrow_, // Possibly for lambdas
@@ -106,6 +107,7 @@ namespace vwa
         {"func", Token::Type::func_},
         {"to", Token::Type::cast},
         {"as", Token::Type::type_pun},
+        {"invoke",Token::Type::invoke},
         {"nullptr", Token::Type::nullptr_},
     };
 

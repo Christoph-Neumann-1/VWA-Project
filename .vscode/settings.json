@@ -75,7 +75,10 @@
         "filesystem": "cpp",
         "ciso646": "cpp",
         "source_location": "cpp",
-        "*.inc": "cpp"
+        "*.inc": "cpp",
+        "hash_map": "cpp",
+        "valarray": "cpp",
+        "cfenv": "cpp"
     },
     "lldb.displayFormat": "auto",
     "lldb.dereferencePointers": true

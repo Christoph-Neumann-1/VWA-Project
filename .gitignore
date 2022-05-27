@@ -6,3 +6,4 @@ perf.data*
 callgrind.out.*
 *.mod
 out.vwa
+testfile2

@@ -3,6 +3,13 @@
 // TODO: if a block does not declare a variable I can lift it to the parent scope
 namespace vwa
 {
+
+    using Symbol = Linker::Symbol;
+    using Module=Linker::Module;
+    using Function = Symbol::Function;
+    using Struct = Linker::Symbol::Struct;
+    using VarType = Linker::VarType;
+    using Field = Linker::Symbol::Field;
     // TODO: allow statements where expressions are expected
     /*
      * Function layout:
@@ -12,10 +19,11 @@ namespace vwa
      DeclVar: name,type, value:bool:mutable
      value:bool:constexpr
      */
-    [[nodiscard]] static Pass1Result::Function parseFunction(const std::vector<Token> &tokens, size_t &pos);
-    [[nodiscard]] static Pass1Result::Struct parseStruct(const std::vector<Token> &tokens, size_t &pos);
-    [[nodiscard]] static std::vector<Pass1Result::Parameter> parseParameterList(const std::vector<Token> &tokens, size_t &pos);
-    [[nodiscard]] static Node::VarType parseType(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Symbol parseFunction(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static Symbol parseStruct(const std::vector<Token> &tokens, size_t &pos);
+    // Field is used since it retains the name
+    [[nodiscard]] static std::vector<Field> parseParameterList(const std::vector<Token> &tokens, size_t &pos);
+    [[nodiscard]] static VarType parseType(const std::vector<Token> &tokens, size_t &pos);
 
     [[nodiscard]] static Node parseStatement(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseBlock(const std::vector<Token> &tokens, size_t &pos);
@@ -26,13 +34,16 @@ namespace vwa
     [[nodiscard]] static Node parseWhile(const std::vector<Token> &tokens, size_t &pos);
     [[nodiscard]] static Node parseFor(const std::vector<Token> &tokens, size_t &pos);
 
-    Pass1Result
-    buildTree(const std::vector<Token> &tokens)
+    Linker::Module buildTree(const std::vector<Token> &tokens)
     {
         size_t i = 0;
-        bool exportSymbol = false;
-        bool constexprSymbol = false;
-        Pass1Result result;
+        // Remove this syntax
+        //  bool exportSymbol = false;
+        //  bool constexprSymbol = false;
+
+        // Pass1Result result;
+        Linker::Module mod;
+
         while (true)
         {
             if (i >= tokens.size())
@@ -40,110 +51,97 @@ namespace vwa
             switch (tokens[i].type)
             {
             case Token::Type::eof:
-                return result;
+                return mod;
             case Token::Type::func_:
-            {
-                auto func = parseFunction(tokens, i);
-                func.exported = exportSymbol;
-                func.constexpr_ = constexprSymbol;
-                constexprSymbol = false;
-                exportSymbol = false;
-                result.functions.emplace_back(std::move(func));
+                mod.exports.emplace_back(parseFunction(tokens, i));
                 break;
-            }
             case Token::Type::struct_:
-            {
-                if (constexprSymbol)
-                    throw std::runtime_error("Structs cannot be constexpr");
-                auto struct_ = parseStruct(tokens, i);
-                struct_.exported = exportSymbol;
-                exportSymbol = false;
-                result.structs.emplace_back(std::move(struct_));
+                mod.exports.emplace_back(parseStruct(tokens, i));
                 break;
-            }
-            case Token::Type::import_:
-            {
-                if (constexprSymbol)
-                    throw std::runtime_error("Imports cannot be constexpr");
-                if(exportSymbol)
-                    throw std::runtime_error("Cannot export imports");
-                if (tokens[i + 1].type != Token::Type::string_literal)
-                    throw std::runtime_error("Expected string after import");
-                result.imports.push_back({std::get<std::string>(tokens[i + 1].value)});
-                exportSymbol = false;
-                i += 2;
-                break;
-            }
-            case Token::Type::export_:
-            {
-                if (constexprSymbol)
-                    throw std::runtime_error("Expected func after constexpr, got export");
-                if(exportSymbol)
-                    throw std::runtime_error("Chained exports");
-                exportSymbol = true;
-                ++i;
-                break;
-            }
-            case Token::Type::const_expr:
-            {
-                constexprSymbol = true;
-                ++i;
-                break;
-            }
+
+            // case Token::Type::import_:
+            // {
+            //     if (constexprSymbol)
+            //         throw std::runtime_error("Imports cannot be constexpr");
+            //     if (exportSymbol)
+            //         throw std::runtime_error("Cannot export imports");
+            //     if (tokens[i + 1].type != Token::Type::string_literal)
+            //         throw std::runtime_error("Expected string after import");
+            //     result.imports.push_back({std::get<std::string>(tokens[i + 1].value)});
+            //     exportSymbol = false;
+            //     i += 2;
+            //     break;
+            // }
+            // case Token::Type::export_:
+            // {
+            //     if (constexprSymbol)
+            //         throw std::runtime_error("Expected func after constexpr, got export");
+            //     if (exportSymbol)
+            //         throw std::runtime_error("Chained exports");
+            //     exportSymbol = true;
+            //     ++i;
+            //     break;
+            // }
+            // case Token::Type::const_expr:
+            // {
+            //     constexprSymbol = true;
+            //     ++i;
+            //     break;
+            // }
             default:
                 throw std::runtime_error("Unexpected token");
             }
         }
     }
 
-    [[nodiscard]] static Pass1Result::Struct parseStruct(const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static Symbol parseStruct(const std::vector<Token> &tokens, size_t &pos)
     {
-        Pass1Result::Struct result;
+        Struct result;
         if (tokens[++pos].type != Token::Type::id)
             throw std::runtime_error("Expected identifier after struct");
-        result.name = std::get<std::string>(tokens[pos].value);
+        auto &name = std::get<std::string>(tokens[pos].value);
         if (tokens[++pos].type != Token::Type::lbrace)
             throw std::runtime_error("Expected { after struct");
         result.fields = parseParameterList(tokens, ++pos);
         if (tokens[pos++].type != Token::Type::rbrace)
             throw std::runtime_error("Expected } after struct");
-        return result;
+        return {{.name=name}, result};
     }
 
-    [[nodiscard]] static std::vector<Pass1Result::Parameter> parseParameterList(const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static std::vector<Field> parseParameterList(const std::vector<Token> &tokens, size_t &pos)
     {
-        std::vector<Pass1Result::Parameter> result;
+        std::vector<Field> result;
         while (1)
         {
             if (tokens[pos].type != Token::Type::mut_ && tokens[pos].type != Token::Type::id)
                 break;
-            Pass1Result::Parameter p;
-            p.isMutable = tokens[pos].type == Token::Type::mut_;
-            pos += p.isMutable;
+            Field f;
+            f.isMutable = tokens[pos].type == Token::Type::mut_;
+            pos += f.isMutable;
             if (tokens[pos].type != Token::Type::id)
                 throw std::runtime_error("Expected identifier parameter declaration");
-            p.name = std::get<std::string>(tokens[pos].value);
+            f.name = std::get<std::string>(tokens[pos].value);
             if (tokens[++pos].type != Token::Type::colon)
                 throw std::runtime_error("Expected : after parameter name");
             if (tokens[++pos].type != Token::Type::id)
                 throw std::runtime_error("Expected typename after :");
-            p.type = parseType(tokens, pos);
-            result.push_back(std::move(p));
+            f.type = parseType(tokens, pos);
+            result.push_back(std::move(f));
             if (tokens[pos].type == Token::Type::comma)
                 ++pos;
         }
         return result;
     }
 
-    [[nodiscard]] static Pass1Result::Function parseFunction(const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static Symbol parseFunction(const std::vector<Token> &tokens, size_t &pos)
     {
-        Pass1Result::Function result;
+        Function result;
         if (tokens[++pos].type != Token::Type::id)
             throw std::runtime_error("Expected identifier after func");
-        result.name = std::get<std::string>(tokens[pos].value);
+        auto &name = std::get<std::string>(tokens[pos].value);
         if (tokens[++pos].type != Token::Type::lparen)
             throw std::runtime_error("Expected ( after func");
-        result.parameters = parseParameterList(tokens, ++pos);
+        result.params=parseParameterList(tokens, ++pos);
         if (tokens[pos++].type != Token::Type::rparen)
             throw std::runtime_error("Expected ) after func");
         if (tokens[pos].type == Token::Type::arrow_)
@@ -155,22 +153,30 @@ namespace vwa
         }
         else
             result.returnType = {{"void"}, 0};
-        result.body = parseStatement(tokens, pos);
-        return result;
+        result.node = new Node{parseStatement(tokens, pos)};
+        return {{.name=name},result};
     }
 
     // Assumes that the first token is a id
-    [[nodiscard]] static Node::VarType parseType(const std::vector<Token> &tokens, size_t &pos)
+    [[nodiscard]] static VarType parseType(const std::vector<Token> &tokens, size_t &pos)
     {
-        Node::VarType result;
-        result.name.name = std::get<std::string>(tokens[pos].value);
-        for (++pos; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
-            result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
-        if (result.name.name == "string")
+        VarType result;
+        auto &name = std::get<std::string>(tokens[pos++].value);
+        if(tokens[pos].type==Token::Type::double_colon)
         {
-            result.name.name = "int";
-            result.pointerDepth++;
+            result.name.module_=name;
+            result.name.name=std::get<std::string>(tokens[++pos].value);
+            ++pos;
         }
+        else
+            result.name.name=name;
+        for (; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
+            result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
+        // if (result.name.name == "string")
+        // {
+        //     result.name.name = "int";
+        //     result.pointerDepth++;
+        // }
         return result;
     }
 
@@ -585,32 +591,32 @@ namespace vwa
         }
     }
 
-    [[deprecated]] [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
-    {
-        Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};
-        while (1)
-        {
-            if (tokens[pos].type == Token::Type::lparen)
-            {
-                if (root.children.size() == 1)
-                    root = std::move(root.children[0]);
-                root = {Node::Type::MemberAccess, {}, {parseFunctionCall(std::move(root), tokens, pos)}, tokens[pos].line};
-            }
-            else if (tokens[pos].type == Token::Type::dot)
-            {
-                ++pos;
-            }
-            else if (tokens[pos].type == Token::Type::id)
-            {
-                // TODO: cache this later on
-                root.children.push_back(Node{Node::Type::Variable, std::get<std::string>(tokens[pos++].value), {}, root.line});
-            }
-            else
-            {
-                if (root.children.size() == 1)
-                    return std::move(root.children[0]);
-                return root;
-            }
-        }
-    }
+    // [[deprecated]] [[nodiscard]] static Node parseMemberAccess(const std::vector<Token> &tokens, size_t &pos)
+    // {
+    //     Node root{Node::Type::MemberAccess, {}, {}, tokens[pos].line};
+    //     while (1)
+    //     {
+    //         if (tokens[pos].type == Token::Type::lparen)
+    //         {
+    //             if (root.children.size() == 1)
+    //                 root = std::move(root.children[0]);
+    //             root = {Node::Type::MemberAccess, {}, {parseFunctionCall(std::move(root), tokens, pos)}, tokens[pos].line};
+    //         }
+    //         else if (tokens[pos].type == Token::Type::dot)
+    //         {
+    //             ++pos;
+    //         }
+    //         else if (tokens[pos].type == Token::Type::id)
+    //         {
+    //             // TODO: cache this later on
+    //             root.children.push_back(Node{Node::Type::Variable, std::get<std::string>(tokens[pos++].value), {}, root.line});
+    //         }
+    //         else
+    //         {
+    //             if (root.children.size() == 1)
+    //                 return std::move(root.children[0]);
+    //             return root;
+    //         }
+    //     }
+    // }
 }

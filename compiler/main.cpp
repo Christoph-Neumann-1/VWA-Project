@@ -15,43 +15,57 @@ int main(int argc, char **argv)
 {
     using namespace vwa;
     auto compStart = std::chrono::high_resolution_clock::now();
-    std::string fileName;
+    std::vector<std::string> fileNames;
     uint loglvl = 3;
     bool emitTree = false;
     bool PreprocessorOnly = false;
 
     CLI::App app{"VWA Programming language"};
-    app.add_option("-f,--file, file", fileName, "Input file")->required()->check(CLI::ExistingFile); // TODO: support for multiple files
+    app.add_option("-f,--file, files", fileNames, "Input files")->required()->check(CLI::ExistingFile); // TODO: support for multiple files
     app.add_option("-l,--log-level", loglvl, "Verbosity of the output (0-3)")->check(CLI::Range(0, 3));
     app.add_flag("-t,--tree", emitTree, "Emit the AST tree");
     app.add_flag("-p,--preprocessor", PreprocessorOnly, "Only preprocess the input file");
     CLI11_PARSE(app, argc, argv);
-
-    std::ifstream input(fileName);
 
     Logger log;
     log.setStream(Logger::LogLevel::Error, &std::cerr);
     for (uint i = 1; i <= loglvl; i++)
         log.setStream(static_cast<Logger::LogLevel>(i), &std::cout);
     log << Logger::Info << "General Setup completed, beginning compilation\n";
-    Preprocessor preprocessor({});
-    // TODO: flag to skip preprocessing.
-    auto processed = preprocessor.process(input);
-    if (PreprocessorOnly || true)
-    {
-        log << Logger::Info << "Preprocessing completed, exiting\n";
-        std::ofstream out("out.vwa");
-        out << processed.toString();
-        // return 0;
-    }
-    auto tokens = tokenize(processed, log);
-    if (!tokens)
-    {
-        log << Logger::Error << "Failed to tokenize file " << fileName;
-        return 1; // TODO: error codes and logger
-    }
 
-    auto tree = buildTree(tokens.value());
+    Preprocessor preprocessor({});
+
+    std::vector<Preprocessor::File> processed;
+    processed.reserve(fileNames.size());
+
+    // TODO: flag to skip preprocessing.
+    for (auto &file : fileNames)
+    {
+        std::ifstream stream{file};
+        processed.push_back(preprocessor.process(stream));
+    }
+    // if (PreprocessorOnly || true)
+    // {
+    //     log << Logger::Info << "Preprocessing completed, exiting\n";
+    //     std::ofstream out("out.vwa");
+    //     out << processed.toString();
+    //     // return 0;
+    // }
+    std::vector<std::vector<Token>> tokens;
+    tokens.reserve(fileNames.size());
+    for (size_t i = 0; i < processed.size(); i++)
+        if (auto r = tokenize(processed[i], log); !r)
+        {
+            log << Logger::Error << "Failed to tokenize file " << fileNames[i];
+            return 1; // TODO: error codes and logger
+        }
+        else
+        {
+            tokens.push_back(std::move(*r));
+        }
+    std::vector<Linker::Module> trees;
+    for (auto &t : tokens)
+        trees.push_back(buildTree(t));
     Linker linker;
     auto handle = dlopen("modules/std/bin/std.native", RTLD_LAZY);
     if (!handle)
@@ -68,22 +82,31 @@ int main(int argc, char **argv)
         return 1;
     }
     auto module = loadFcn();
-    module->data = handle;
-    linker.provideModule("std", std::move(*module));
-    auto compiled = compile({{fileName, tree}}, linker, log);
+    module->data.emplace<Linker::Module::DlHandle>(handle);
+    linker.provideModule(std::move(*module));
+    for (size_t i = 0; i < fileNames.size(); ++i)
+        trees[i].name = fileNames[i]; // TODO: make sure all identifiers used internally are updated
+    // For some reason initializer lists don't work with move only types
+    // I hope I am allowed to move out of the temporary
+    auto compiled = compile(std::move(trees), linker, log);
+    // auto compiled = compile(({ std::vector<Linker::Module> tmp; tmp.emplace_back(std::move(tree));std::move(tmp); }), linker, log);
+
+    // TODO: call some kind of function to load definitions for functions for which only declarations exist
+
+    // linker.patchAddresses();
 
     const bc::BcToken *main{0};
     for (auto &module : compiled)
     {
-        if (module->main)
+        auto sym = linker.tryFind({"main", module->name});
+        if (sym)
         {
             if (main)
             {
-                log << Logger::Error << "Multiple main functions found\n";
+                log << Logger::Error << "Multiple main functions found";
                 return 1;
             }
-            else
-                main = std::get<std::vector<bc::BcToken>>(module->data).data() + module->main - 1;
+            main = std::get<0>(sym->data).idx + std::get<3>(module->data).data();
         }
     }
     if (!main)
@@ -141,6 +164,13 @@ int main(int argc, char **argv)
     //     8,0,0,0,
     //     0,0,0,0,};
     log << Logger::Info << "Executing main function\n";
+    vm.setupStack();
+    // TODO: make this use the real arguments
+    int64_t firstArg[] = {'t', 'e', 's', 't', '\0'};
+    int64_t *args[1] = {firstArg};
+
+    vm.stack.push<int64_t>(1);
+    vm.stack.push<void *>(args);
     log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
     auto begin = std::chrono::high_resolution_clock::now();
     auto res = vm.exec(main);

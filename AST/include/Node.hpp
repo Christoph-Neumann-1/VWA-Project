@@ -3,19 +3,10 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <Linker.hpp>
 namespace vwa
 {
 
-    struct Identifier
-    {
-        std::string name;
-        std::string module_ = ""; // TODO: add a constructor
-
-        bool operator==(const Identifier &other) const
-        {
-            return name == other.name && module_ == other.module_;
-        }
-    };
 
     struct Node
     {
@@ -66,32 +57,23 @@ namespace vwa
             TypePun,
         };
         Type type = Type::Unassigned;
-        struct VarType
-        {
-            Identifier name;
-            uint32_t pointerDepth = 0;
-        };
-        struct VarTypeCached
-        {
-            size_t index;
-            uint32_t pointerDepth;
-        };
-        std::variant<std::monostate, std::string, Identifier, char, int32_t, int64_t, float, double, bool, VarType, VarTypeCached> value = {};
+        // struct VarType
+        // {
+        //     Identifier name;
+        //     uint32_t pointerDepth = 0;
+        //     bool operator==(const VarType &other) const
+        //     {
+        //         return name == other.name && pointerDepth == other.pointerDepth;
+        //     }
+        // };
+        // struct VarTypeCached
+        // {
+        //     size_t index;
+        //     uint32_t pointerDepth;
+        // };
+        std::variant<std::monostate, std::string, Identifier, char, int32_t, int64_t, float, double, bool, Linker::VarType, Linker::Cache::CachedType> value = {};
         std::vector<Node> children{};
         uint64_t line = 0;
         // TODO: toString
-    };
-}
-
-namespace std
-{
-    template <>
-    struct hash<vwa::Identifier>
-    {
-        // I really hope this works
-        size_t operator()(const vwa::Identifier &id) const
-        {
-            return hash<string>()(id.name) ^ hash<string>()(id.module_);
-        }
     };
 }

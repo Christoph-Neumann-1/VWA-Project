@@ -3,10 +3,14 @@
 // FIXME: if any code for casting is inserted, I NEED to make sure there are no problems with reads relative to the instruction ptr. I'll need that should I ever implement statement expressions.
 //  TODO: assert, at some point that primitive types are not overriden
 //  TODO: output more useful format and use it for optimization
+// FIXME: i still need to build the cache and make sure I insert the correct module name everywhere
 namespace vwa
 {
 
-    void GenModBc(Linker::Module *mod, const Pass1Result &pass1, Cache *cache, Logger &log)
+    using CachedType = Linker::Cache::CachedType;
+    using Cache = Linker::Cache;
+
+    void GenModBc(Linker::Module &mod, Linker &linker, Logger &log)
     {
         log << Logger::Info << "Generating bytecode\n";
         // This is used to represent the constant pool. Its relative adress is always known, since it's at the beginning of the module.
@@ -16,8 +20,9 @@ namespace vwa
         // Data must be pushed in reverse order
         std::vector<uint8_t> constants{};
         std::vector<bc::BcToken> bc;
-        for (auto &func : pass1.functions)
-            compileFunc(mod, cache, func, constants, bc, log);
+        for (auto &func : mod.exports)
+            if (std::holds_alternative<Linker::Symbol::Function>(func.data))
+                compileFunc(mod, linker, func, constants, bc, log);
 
         auto bcSize = bc.size();
         bc.resize(bcSize + constants.size());
@@ -38,18 +43,17 @@ namespace vwa
                 bc[j++] = {constants[i--]};
             }
         }
-        //TODO: handle internal syms too
-        for (auto &s : mod->exportedSymbols)
-            if (auto f = std::get_if < 0>(&s.data))
-                f->impl.index += constants.size();
-        if(mod->main)
-            mod->main += constants.size();
-        mod->data = std::move(bc);
+        // TODO: this should really happen somewhere else, like when patching internal function calls
+        for (auto &s : mod.exports)
+            if (auto f = std::get_if<0>(&s.data))
+                f->idx += constants.size();
+        mod.data = std::move(bc);
     }
 
     // This function inserts the token at the specified position and offsets all following instructions.
     // The instruction inserted is not offset. this assumes all following instructions are complete, or at the very least have enough space allocated
     // TODO: make sure this does not cause problems with jumps before this(example an if which jumps past the body if the condition is false)
+    // FIXME Did I delete this on accident?
     void bcInsert(std::vector<bc::BcToken> &bc, const size_t pos)
     {
         bc.insert(bc.begin() + pos, bc::BcToken{});
@@ -64,106 +68,117 @@ namespace vwa
             case JumpFuncRel:
                 ++*reinterpret_cast<int64_t *>(&bc[i + 1]);
                 continue;
+            default:
+                continue;
             }
         }
     }
 
-    auto &getMember(const std::string &name, const size_t type, const Cache &cache)
-    {
-        if (type < numReservedIndices)
-            throw std::runtime_error("Attempted member access on primitive type");
-        auto &typeInfo = cache.structs[type - numReservedIndices].symbol->data;
-        if (auto val = std::get_if<1>(&typeInfo))
-        {
-            if (auto it = std::find_if(val->fields.begin(), val->fields.end(), [&name](const auto &field)
-                                       { return field.name == name; });
-                it != val->fields.end())
-            {
-                auto idx = std::distance(val->fields.begin(), it);
-                return cache.structs[type - numReservedIndices].members[idx];
-            }
-            else
-            {
-                throw std::runtime_error("Field " + name + " not found in struct " + cache.structs[type - numReservedIndices].symbol->name.name);
-            }
-        }
-        else
-        {
-            throw std::runtime_error("Attempted member access on non-struct type");
-        }
-    }
+    // auto &getMember(const std::string &name, const size_t type, const Cache &cache)
+    // {
+    //     if (type < Linker::Cache::reservedIndices)
+    //         throw std::runtime_error("Attempted member access on primitive type");
+    //     auto &typeInfo = cache.structs[type - Linker::Cache::reservedIndices].symbol->data;
+    //     if (auto val = std::get_if<1>(&typeInfo))
+    //     {
+    //         if (auto it = std::find_if(val->fields.begin(), val->fields.end(), [&name](const auto &field)
+    //                                    { return field.name == name; });
+    //             it != val->fields.end())
+    //         {
+    //             auto idx = std::distance(val->fields.begin(), it);
+    //             return cache.structs[type - Linker::Cache::reservedIndices].members[idx];
+    //         }
+    //         else
+    //         {
+    //             throw std::runtime_error("Field " + name + " not found in struct " + cache.structs[type - Linker::Cache::reservedIndices].symbol->name.name);
+    //         }
+    //     }
+    //     else
+    //     {
+    //         throw std::runtime_error("Attempted member access on non-struct type");
+    //     }
+    // }
 
-    void discard(NodeResult result, std::vector<bc::BcToken> &bc, Cache *cache)
+    void discard(const CachedType result, std::vector<bc::BcToken> &bc, const Cache &cache)
     {
-        auto size = getSizeOfType(result.type, result.pointerDepth, cache->structs);
-        if (size)
-        {
-            bc.push_back({bc::Pop});
-            pushToBc(bc, size);
-        }
+        auto size = cache.getSizeOfType(result);
+        if (!size)
+            return;
+        bc.push_back({bc::Pop});
+        pushToBc(bc, size);
     }
 
     // The exact pointer depth is irrelevant
-    [[nodiscard]] std::optional<bc::BcInstruction> typeCast(const uint64_t resultT, const bool rIsPtr, const uint64_t argT, const bool aIsPtr, Logger &log)
+    [[nodiscard]] std::optional<bc::BcInstruction> typeCast(const CachedType resultT, const CachedType argT, Logger &log)
     {
-        // FIXME: implement pointers
-        if (resultT == argT && rIsPtr == aIsPtr)
-            return std::nullopt;
-        if (rIsPtr && aIsPtr)
-            return std::nullopt;
-        if (rIsPtr)
+        auto [rT, rP, rI] = Cache::disassemble(resultT);
+        auto [aT, aP, aI] = Cache::disassemble(argT);
+        if (rT || aT)
         {
-            if (argT == PrimitiveTypes::I64)
+            log << Logger::Error << "Failed to cast types: Is a function\n";
+            throw std::runtime_error("Failed to cast types: Is a function");
+        }
+        // FIXME: implement pointers
+        if (resultT == argT || (rP && aP))
+            return std::nullopt;
+        if ((!rP && rT == Cache::FPtr) || (!aP && aT == Cache::FPtr))
+        {
+            log << Logger::Error << "Cannot cast function pointers, it has no defined representation";
+            throw std::runtime_error("Cannot cast function pointer");
+        }
+        if (rP)
+        {
+            if (aI == Cache::I64)
                 return std::nullopt;
             log << Logger::Error << "Pointer cast to non-pointer type\n";
             throw std::runtime_error("Pointer cast to non-pointer type");
         }
-        if (aIsPtr)
+        if (aP)
         {
-            if (resultT == PrimitiveTypes::I64)
+            if (rI == Cache::I64)
                 return std::nullopt;
             log << Logger::Error << "Non-pointer cast to pointer type\n";
             throw std::runtime_error("Non-pointer cast to pointer type");
         }
-        if (resultT == PrimitiveTypes::Void || argT == PrimitiveTypes::Void)
+        if (rI == Cache::Void || aI == Cache::Void)
         {
             log << Logger::Error << "Invalid cast casting from/to void is invalid\n";
             throw std::runtime_error("Cannot cast void");
         }
 
-        switch (argT)
+        switch (aI)
         {
-        case PrimitiveTypes::F64:
-            switch (resultT)
+        case Cache::F64:
+            switch (rI)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 return bc::FtoI;
-            case PrimitiveTypes::U8:
+            case Cache::U8:
                 return bc::FtoC;
             default:
                 log << Logger::Error << "Casting is only possible for builtin types\n";
                 throw std::runtime_error("Casting is only possible for builtin types");
             }
             return std::nullopt;
-        case PrimitiveTypes::I64:
-            switch (resultT)
+        case Cache::I64:
+            switch (rI)
             {
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 return bc::ItoF;
-            case PrimitiveTypes::U8:
+            case Cache::U8:
                 return bc::ItoC;
             default:
                 log << Logger::Error << "Casting is only possible for builtin types\n";
                 throw std::runtime_error("Casting is only possible for builtin types");
             }
             return std::nullopt;
-        case PrimitiveTypes::U8:
-            switch (resultT)
+        case Cache::U8:
+            switch (rI)
             {
                 // TODO: implement this
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 return bc::CtoF;
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 return bc::CtoI;
             default:
                 log << Logger::Error << "Casting is only possible for builtin types\n";
@@ -175,120 +190,127 @@ namespace vwa
             throw std::runtime_error("Casting is only possible for builtin types");
         }
     }
-    void compileFunc(Linker::Module *module, Cache *cache, const Pass1Result::Function &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log)
+    void compileFunc(Linker::Module &module, Linker &linker, Linker::Symbol &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log)
     {
-        log << Logger::Info << "Compiling function " << func.name << '\n';
-        bool main = func.name == "main";
+        auto &cache = linker.cache;
+        auto &f = std::get<Linker::Symbol::Function>(func.data);
+        auto cached = cache.ids.find(func.name)->second;
+        if (!~cached)
+        {
+            log << Logger::Error << "Failed to find function " << func.name.name << '\n';
+            throw std::runtime_error("Failed to find function");
+        }
+        auto &cachedF = cache.functions[Cache::getIndex(cached)];
+        auto [_, rP, rI] = Cache::disassemble(cachedF.returnType);
+        log << Logger::Info << "Compiling function " << func.name.name << '\n';
+        bool main = func.name.name == "main";
         if (main)
         {
-            if (func.returnType.name.name != "int" || func.returnType.pointerDepth)
+            if (rP || rI != Cache::I64)
             {
                 log << Logger::Error << "Main function must return int\n";
                 throw std::runtime_error("Main function must return int");
             }
-            log << Logger::Info << "Found main function\n";
-            if (module->main)
+            if (cachedF.params.size() != 2 || cachedF.params[0] != Cache::I64 || cachedF.params[1] != (Cache::I64 | (2ul << 32)))
             {
-                log << Logger::Error << "Multiple main functions found\n";
-                throw std::runtime_error("Multiple main functions found");
+                log << Logger::Error << "Main function must have 2 parameters int and string*\n";
+                throw std::runtime_error("Main function must have 2 parameters int and string*");
             }
-            else
-                module->main = bc.size() + 1;
+            log << Logger::Info << "Found main function\n";
         }
-        auto cached = cache->map.find({func.name, module->name});
-        if (cached == cache->map.end() || cached->second.second != Cache::Type::Function)
-        {
-            log << Logger::Error << "Function not found in cache, this should never happen";
-            throw std::runtime_error("Function not found in cache");
-        }
-        auto &funcData = cache->functions[cached->second.first];
+        // auto &funcData = cache->functions[cached->second.first];
         std::vector<Scope> scopes;
         Scope scope{0, 16};
-        if (funcData.args.size() != func.parameters.size())
+        if (f.params.size() != cachedF.params.size())
         {
             log << Logger::Error << "Function invalid parameter count missmatch between cache and original parameters";
             throw std::runtime_error("Function has wrong number of parameters");
         }
-        for (size_t i = 0; i < funcData.args.size(); i++)
+        for (size_t i = 0; i < f.params.size(); i++)
         {
-            scope.variables.insert({func.parameters[i].name, {scope.size + scope.offset, funcData.args[i].type, funcData.args[i].pointerDepth}});
-            scope.size += getSizeOfType(funcData.args[i].type, funcData.args[i].pointerDepth, cache->structs);
+            scope.variables.insert({f.params[i].name, {cachedF.params[i], scope.size + scope.offset}});
+            scope.size += cache.getSizeOfType(cachedF.params[i]);
         }
         scopes.push_back(scope);
-        funcData.address = bc.size();
-        funcData.finished = true; // Indicates that the adress is final.
-        // TODO: store the offsets somewhere. What was I thinking?
-        // FIXME: consider all outcomes, like having a value at the end of a void function and such
-        auto res = compileNode(module, cache, &func.body, NodeResult{funcData.returnType.type, funcData.returnType.pointerDepth}, constPool, bc, scopes, log);
-        //It doesn't really matter if this is unnecessary, there is only one main function so the impact is negligible
-        if (main && !(res.type || res.pointerDepth))
+        f.idx = bc.size();
+        // FIXME: consider all outcomescache having a value at the end of a void function and such
+        auto res = compileNode(module, linker, *static_cast<Node *>(f.node), cachedF.returnType, constPool, bc, scopes, log);
+        delete static_cast<Node *>(f.node);
+        // auto [__, resP, resT] = Cache::disassemble(res);
+        // It doesn't really matter if this is unnecessary, there is only one main function so the impact is negligible
+        if (main && !res)
         {
             bc.push_back({bc::Push64});
             pushToBc<int64_t>(bc, 0);
-            res.type = 1;
-            res.pointerDepth = 0;
+            res = Cache::I64;
         }
-        if (res.type || res.pointerDepth)
+        // FIXME: by popping the stack, the return value is discarded, it needs to be moved somewhere else
+        if (res)
         {
-            if (!funcData.returnType.type && !funcData.returnType.pointerDepth)
+            if (!cachedF.returnType)
                 discard(res, bc, cache);
             else
             {
                 log << Logger::Info << "Function body evaluates to value, adding implicit return\n";
-                if (auto instr = typeCast(funcData.returnType.type, funcData.returnType.pointerDepth, res.type, res.pointerDepth, log); instr)
+                if (auto instr = typeCast(cachedF.returnType, res, log); instr)
                     bc.push_back({*instr});
+                res = cachedF.returnType;
             }
         }
-        else if (funcData.returnType.type || funcData.returnType.pointerDepth)
+        // else if (funcData.returnType.type || funcData.returnType.pointerDepth)
         {
             // I should propably fix this at some point
             // log << "Function requires a return value but none was provided\n";
             // throw std::runtime_error("Function requires a return value but none was provided");
         }
         bc.push_back(bc::BcToken{bc::Return});
-        pushToBc(bc, uint64_t{getSizeOfType(res.type, res.pointerDepth, cache->structs)});
+        pushToBc(bc, uint64_t{cache.getSizeOfType(res)});
     }
 
     // First pos is needed if the first args is to be cast
-    NodeResult promoteType(const uint64_t type, const bool isPtr, const uint64_t otherType, const bool otherIsPtr, std::vector<bc::BcToken> &bc, size_t firstPos, Logger &log)
+    // TODO: implement this withou shifting stuff around
+    // TODo: update
+    CachedType promoteType(const CachedType a, const CachedType b, std::vector<bc::BcToken> &bc, size_t firstPos, Logger &log)
     {
-        if (type == otherType && isPtr == otherIsPtr)
-            return NodeResult{type, isPtr};
-        if (isPtr || otherIsPtr)
+        if (a == b)
+            return a;
+        auto [_a, aP, aI] = Cache::disassemble(a);
+        auto [_b, bP, bI] = Cache::disassemble(b);
+        if (aP || bP)
             throw std::runtime_error("Pointers not implemented");
-        if (type == PrimitiveTypes::F64 || otherType == PrimitiveTypes::F64)
+        if (aI == Cache::F64 || bI == Cache::F64)
         {
-            if (auto instr = typeCast(PrimitiveTypes::F64, false, type, false, log); instr)
+            if (auto instr = typeCast(Cache::F64, a, log); instr)
                 bc.insert(bc.begin() + firstPos, {*instr});
             // typeCast(PrimitiveTypes::F64, false, otherType, false, log);
-            else if (auto instr = typeCast(PrimitiveTypes::F64, false, otherType, false, log); instr)
+            else if (auto instr = typeCast(Cache::F64, b, log); instr)
                 bc.push_back({*instr});
             // typeCast(PrimitiveTypes::F64, false, type, false, log);
-            return NodeResult{PrimitiveTypes::F64, false};
+            return Cache::F64;
         }
-        if (type == PrimitiveTypes::I64 || otherType == PrimitiveTypes::I64)
+        if (aI == Cache::I64 || bI == Cache::I64)
         {
             // typeCast(PrimitiveTypes::I64, false, type, false, log);
             // typeCast(PrimitiveTypes::I64, false, otherType, false, log);
 
-            if (auto instr = typeCast(PrimitiveTypes::I64, false, type, false, log); instr)
+            if (auto instr = typeCast(Cache::I64, a, log); instr)
                 bc.insert(bc.begin() + firstPos, {*instr});
-            else if (auto instr = typeCast(PrimitiveTypes::I64, false, otherType, false, log); instr)
+            else if (auto instr = typeCast(Cache::I64, b, log); instr)
                 bc.push_back({*instr});
 
-            return NodeResult{PrimitiveTypes::I64, false};
+            return Cache::I64;
         }
         // Is there any point in doing this?
-        if (type == PrimitiveTypes::U8 || otherType == PrimitiveTypes::U8)
+        if (aI == Cache::U8 || bI == Cache::U8)
         {
             // typeCast(PrimitiveTypes::U8, false, type, false, log);
             // typeCast(PrimitiveTypes::U8, false, otherType, false, log);
-            if (auto instr = typeCast(PrimitiveTypes::U8, false, type, false, log); instr)
+            if (auto instr = typeCast(Cache::U8, a, log); instr)
                 bc.insert(bc.begin() + firstPos, {*instr});
-            else if (auto instr = typeCast(PrimitiveTypes::U8, false, otherType, false, log); instr)
+            else if (auto instr = typeCast(Cache::U8, b, log); instr)
                 bc.push_back({*instr});
             // FIXME: make this promote everything to int, or remove it all together
-            return NodeResult{PrimitiveTypes::U8, false};
+            return Cache::U8;
         }
         log << Logger::Error << "Cannot promote types\n";
         throw std::runtime_error("Cannot promote types");
@@ -301,63 +323,64 @@ namespace vwa
         for (auto &child : node.children)
             if (child.type == Node::Type::DeclareVar)
             {
-                auto [_, res] = scope.variables.insert({std::get<std::string>(child.children[0].value), {scope.size + scope.offset, std::get<Node::VarTypeCached>(child.children[1].value).index, std::get<Node::VarTypeCached>(child.children[1].value).pointerDepth}});
+                auto [_, res] = scope.variables.insert({std::get<std::string>(child.children[0].value), {std::get<CachedType>(child.children[1].value), scope.size + scope.offset}});
                 if (!res)
                 {
                     log << Logger::Error << "Variable " << std::get<std::string>(child.children[0].value) << " already declared\n";
                     throw std::runtime_error("Variable already declared");
                 }
-                scope.size += getSizeOfType(std::get<Node::VarTypeCached>(child.children[1].value).index, std::get<Node::VarTypeCached>(child.children[1].value).pointerDepth, cache.structs);
+                scope.size += cache.getSizeOfType(std::get<CachedType>(child.children[1].value));
             }
         return scope;
     }
 
     // TODO: member access
-    NodeResult compileNode(Linker::Module *module, Cache *cache, const Node *node, const NodeResult fRetT, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, std::vector<Scope> &scopes, Logger &log)
+    CachedType compileNode(Linker::Module &module, Linker &linker, const Node &node, const CachedType fRetT, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, std::vector<Scope> &scopes, Logger &log)
     {
+        auto &cache = linker.cache;
         // TODO: consider another pass to generate scopes beforehand
-        switch (node->type)
+        switch (node.type)
         {
         case Node::Type::Unassigned:
             log << Logger::Error << "Unassigned node";
             throw std::runtime_error("Unassigned node");
         case Node::Type::Return:
-            if (node->children.size())
+            if (node.children.size())
             {
-                auto res = compileNode(module, cache, &node->children.back(), fRetT, constPool, bc, scopes, log);
-                if (auto instr = typeCast(fRetT.type, fRetT.pointerDepth, res.type, res.pointerDepth, log); instr)
+                auto res = compileNode(module, linker, node.children.back(), fRetT, constPool, bc, scopes, log);
+                if (auto instr = typeCast(fRetT, res, log); instr)
                     bc.push_back({*instr});
             }
             bc.push_back({bc::Return});
-            pushToBc(bc, uint64_t{getSizeOfType(fRetT.type, fRetT.pointerDepth, cache->structs)});
-            return {};
+            pushToBc<uint64_t>(bc, cache.getSizeOfType(fRetT));
+            return Cache::Void;
         case Node::Type::LiteralI:
             bc.push_back({bc::Push64});
-            pushToBc(bc, std::get<int64_t>(node->value));
-            return {PrimitiveTypes::I64};
+            pushToBc(bc, std::get<int64_t>(node.value));
+            return Cache::I64;
         case Node::Type::LiteralF:
             bc.push_back({bc::Push64});
-            pushToBc(bc, std::get<double>(node->value));
-            return {PrimitiveTypes::F64};
+            pushToBc(bc, std::get<double>(node.value));
+            return Cache::F64;
         case Node::Type::Block:
         {
 
-            if (!node->children.size())
-                return {};
-            auto scope = generateBlockScope(*node, *cache, log, scopes.back().size + scopes.back().offset);
-            scopes.push_back(scope);
+            if (!node.children.size())
+                return Cache::Void;
+            auto scope = generateBlockScope(node, cache, log, scopes.back().size + scopes.back().offset);
+            scopes.push_back(std::move(scope));
             if (scope.size)
             {
                 bc.push_back({bc::Push});
                 pushToBc(bc, uint64_t{scope.size});
             }
             // I do not know why, but this entered a infinite loop, but it works now so I won't touch it
-            // for (auto &child : node->children)
-            for (size_t i = 0; i < node->children.size() - 1; ++i)
+            // for (auto &child : node.children)
+            for (size_t i = 0; i < node.children.size() - 1; ++i)
                 // Discard means that the value is not used, it is just dropped from the stack
                 // TODO: consider not discarding last value
-                discard(compileNode(module, cache, &node->children[i], fRetT, constPool, bc, scopes, log), bc, cache);
-            auto res = compileNode(module, cache, &node->children.back(), fRetT, constPool, bc, scopes, log);
+                discard(compileNode(module, linker, node.children[i], fRetT, constPool, bc, scopes, log), bc, cache);
+            auto res = compileNode(module, linker, node.children.back(), fRetT, constPool, bc, scopes, log);
             if (scope.size)
             {
                 bc.push_back({bc::Pop});
@@ -368,39 +391,44 @@ namespace vwa
         }
         case Node::Type::Plus:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            NodeResult ret;
-            if (!lhs.pointerDepth && !rhs.pointerDepth)
-                ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            else if (lhs.pointerDepth)
-                if (rhs.pointerDepth)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto [_a, aP, aI] = Cache::disassemble(lhs);
+            auto [_b, bP, bI] = Cache::disassemble(rhs);
+            CachedType ret;
+            if (!aP && !bP)
+                ret = promoteType(lhs, rhs, bc, pos, log);
+            else if (aP)
+                if (bP)
                     throw std::runtime_error("Cannot add pointers");
-                else if (rhs.type == PrimitiveTypes::I64)
+                else if (bP == Cache::I64)
                 {
-                    ret = lhs;
                     bc.push_back({bc::AddI});
-                    return ret;
+                    return lhs;
                 }
                 else
                     throw std::runtime_error("Cannot add pointers");
-            else if (rhs.pointerDepth)
-                if (lhs.type == PrimitiveTypes::I64)
+            else if (bP)
+                if (aP)
                 {
-                    ret = rhs;
                     // TODO this is a horrible solution, I really need to find out if this is a safe thing to do
                     bc.push_back({bc::AddI});
-                    return ret;
+                    return rhs;
                 }
                 else
                     throw std::runtime_error("Cannot add pointers");
-            switch (ret.type)
+            else
             {
-            case PrimitiveTypes::I64:
+                throw 0; // This is unreachable, but clang kept complaining about it
+            }
+            // I know ret is not a pointer, so I don't need any bitwise logic
+            switch (ret)
+            {
+            case Cache::I64:
                 bc.push_back({bc::AddI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::AddF});
                 break;
             default:
@@ -411,16 +439,17 @@ namespace vwa
         }
         case Node::Type::Minus:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            switch (ret.type)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto ret = promoteType(lhs, rhs, bc, pos, log);
+            // TODO: pointers
+            switch (ret)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 bc.push_back({bc::SubI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::SubF});
                 break;
             default:
@@ -429,20 +458,21 @@ namespace vwa
             }
             return ret;
         }
+        // TODO: builtin type for this and other common ops like increment(provide in-place operations)
         case Node::Type::UnaryMinus:
         {
             // TODO: promote chars to int for this and similar ops
-            auto res = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            if (res.pointerDepth)
-                throw std::runtime_error("Pointer not implemented");
-            switch (res.type)
+            auto res = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            if (res & Cache::pointerDepthMask)
+                throw std::runtime_error("Pointer cannot be negated");
+            switch (res)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 bc.push_back({bc::Push64});
                 pushToBc(bc, int64_t{-1});
                 bc.push_back({bc::MulI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::NegF});
                 break;
             default:
@@ -453,16 +483,16 @@ namespace vwa
         }
         case Node::Type::Multiply:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            switch (ret.type)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto ret = promoteType(lhs, rhs, bc, pos, log);
+            switch (ret)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 bc.push_back({bc::MulI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::MulF});
                 break;
             default:
@@ -473,16 +503,16 @@ namespace vwa
         }
         case Node::Type::Divide:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            switch (ret.type)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto ret = promoteType(lhs, rhs, bc, pos, log);
+            switch (ret)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 bc.push_back({bc::DivI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::DivF});
                 break;
             default:
@@ -493,59 +523,59 @@ namespace vwa
         }
         case Node::Type::Modulo:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            if (auto instr = typeCast(PrimitiveTypes::I64, false, lhs.type, lhs.pointerDepth, log); instr)
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(Cache::I64, lhs, log); instr)
                 bc.push_back({*instr});
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            if (auto instr = typeCast(PrimitiveTypes::I64, false, rhs.type, rhs.pointerDepth, log); instr)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(Cache::I64, rhs, log); instr)
                 bc.push_back({*instr});
             bc.push_back({bc::ModI});
-            return {PrimitiveTypes::I64};
+            return Cache::I64;
         }
         case Node::Type::Power:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto ret = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            switch (ret.type)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto ret = promoteType(lhs, rhs, bc, pos, log);
+            switch (ret)
             {
-            case PrimitiveTypes::I64:
+            case Cache::I64:
                 bc.push_back({bc::PowerI});
                 break;
-            case PrimitiveTypes::F64:
+            case Cache::F64:
                 bc.push_back({bc::PowerF});
                 break;
             default:
-                log << Logger::Error << "Cannot power types\n";
-                throw std::runtime_error("Cannot power types");
+                log << Logger::Error << "Cannot compute exponent\n";
+                throw std::runtime_error("Cannot compute exponent");
             }
             return ret;
         }
         case Node::Type::DeclareVar:
         {
-            if (node->children.size() == 4)
+            if (node.children.size() == 4)
             {
-                auto &name = std::get<std::string>(node->children[0].value);
+                auto &name = std::get<std::string>(node.children[0].value);
                 auto it = scopes.back().variables.find(name);
-                auto init = compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
-                if (auto instr = typeCast(it->second.type, it->second.pointerDepth, init.type, init.pointerDepth, log); instr)
+                auto init = compileNode(module, linker, node.children[3], fRetT, constPool, bc, scopes, log);
+                if (auto instr = typeCast(it->second.type, init, log); instr)
                     bc.push_back({*instr});
                 bc.push_back({bc::WriteRel});
                 pushToBc<intptr_t>(bc, it->second.offset);
-                pushToBc<uint64_t>(bc, getSizeOfType(init.type, init.pointerDepth, cache->structs));
+                pushToBc<uint64_t>(bc, cache.getSizeOfType(init));
             }
-            return {};
+            return Cache::Void;
         }
         case Node::Type::Assign:
         {
-            auto expr = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
+            auto expr = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto &what = node->children[0];
-            NodeResult rt;
+            auto &what = node.children[0];
+            CachedType rt;
             if (what.type == Node::Type::Dereference)
             {
-                rt = compileNode(module, cache, &what.children[0], fRetT, constPool, bc, scopes, log);
+                rt = compileNode(module, linker, what.children[0], fRetT, constPool, bc, scopes, log);
                 bc.push_back({bc::WriteAbs});
             }
             else if (what.type == Node::Type::Variable)
@@ -557,16 +587,16 @@ namespace vwa
                     auto it2 = it->variables.find(name);
                     if (it2 != it->variables.end())
                     {
-                        rt.type = it2->second.type;
-                        rt.pointerDepth = it2->second.pointerDepth;
+                        rt = it2->second.type;
                         pushToBc<intptr_t>(bc, it2->second.offset);
                     }
                 }
             }
-            // TODO: operator -> either here or by rewriting it earlier
+            // TODO: convert members to indices early on
+            // TODO: can I also handle other variables this way?
             else if (what.type == Node::Type::MemberAccess)
             {
-                auto evalTree = [&](const Node &node, auto &self) -> std::tuple<size_t, size_t, size_t, bool>
+                auto evalTree = [&](const Node &node, auto &self) -> std::tuple<CachedType, size_t, bool>
                 {
                     switch (node.type)
                     {
@@ -576,7 +606,7 @@ namespace vwa
                         {
                             auto it2 = it->variables.find(std::get<Identifier>(node.value).name);
                             if (it2 != it->variables.end())
-                                return {it2->second.type, it2->second.pointerDepth, it2->second.offset, false};
+                                return {it2->second.type, it2->second.offset, false};
                         }
                         log << Logger::Error << "Cannot access member\n";
                         throw std::runtime_error("Cannot find variable");
@@ -584,23 +614,31 @@ namespace vwa
                     case Node::Type::MemberAccess:
                     {
                         auto prev = self(node.children[0], self);
-                        if (std::get<1>(prev))
+                        auto [_t, ptr, idx] = Cache::disassemble(std::get<0>(prev));
+                        if (ptr)
                         {
                             log << Logger::Error << "Cannot access member of ptr\n";
                             throw std::runtime_error("Cannot access member of ptr");
                         }
-                        auto &mem = getMember(std::get<std::string>(node.children[1].value), std::get<0>(prev), *cache);
-                        return {mem.type, mem.ptrDepth, mem.offset + std::get<2>(prev), std::get<3>(prev)};
+                        auto mem = cache.getMemberByName(std::get<0>(prev), std::get<std::string>(node.children[1].value));
+                        if (!~mem)
+                        {
+                            log << Logger::Error << "Cannot access member\n";
+                            throw std::runtime_error("Cannot access member");
+                        }
+                        auto &m = cache.structs[idx - Cache::reservedIndicies].members[mem];
+                        return {m.type, m.offset + std::get<1>(prev), std::get<2>(prev)};
                     }
                     case Node::Type::Dereference:
                     {
-                        auto res = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
-                        if (!res.pointerDepth)
+                        auto res = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+                        if (!(res & Cache::pointerDepthMask))
                         {
                             log << Logger::Error << "Cannot dereference non-pointer\n";
                             throw std::runtime_error("Cannot dereference non-pointer");
                         }
-                        return {res.type, res.pointerDepth - 1, 0, true};
+                        // This can probably be done more efficiently by messing around with the bits
+                        return {Cache::setPointerDepth(res, Cache::getPointerDepth(res) - 1), 0, true};
                     }
                     default:
                         log << Logger::Error << "Cannot access member of temporary\n";
@@ -608,38 +646,36 @@ namespace vwa
                     }
                 };
                 auto res = evalTree(what, evalTree);
-                switch (std::get<3>(res))
+                if (std::get<2>(res))
                 {
-                case false:
-                    bc.push_back({bc::WriteRel});
-                    pushToBc<intptr_t>(bc, std::get<2>(res));
-                    break;
-                case true:
                     bc.push_back({bc::Push64});
                     // This is probably the wrong sign, but since integers are twos complement this should be fine
-                    pushToBc<uint64_t>(bc, std::get<2>(res));
+                    pushToBc<uint64_t>(bc, std::get<1>(res));
                     bc.push_back({bc::AddI});
                     bc.push_back({bc::WriteAbs});
-                    break;
                 }
-                rt.type = std::get<0>(res);
-                rt.pointerDepth = std::get<1>(res);
+                else
+                {
+                    bc.push_back({bc::WriteRel});
+                    pushToBc<intptr_t>(bc, std::get<1>(res));
+                }
+                rt = std::get<0>(res);
             }
             else
             {
                 log << Logger::Error << "Cannot assign to non-variable yet\n";
                 throw std::runtime_error("Cannot assign to non-variable yet");
             }
-            if (!rt.type)
+            if (!cache.isTypeValid(rt))
                 throw std::runtime_error("Assignment failed");
-            if (auto instr = typeCast(rt.type, rt.pointerDepth, expr.type, expr.pointerDepth, log); instr)
+            if (auto instr = typeCast(rt, expr, log); instr)
                 bc.insert(bc.begin() + pos - 1, {*instr});
-            pushToBc<uint64_t>(bc, getSizeOfType(rt.type, rt.pointerDepth, cache->structs));
-            return {};
+            pushToBc<uint64_t>(bc, cache.getSizeOfType(rt));
+            return Cache::Void;
         }
         case Node::Type::Variable:
         {
-            auto &name = std::get<Identifier>(node->value).name;
+            auto &name = std::get<Identifier>(node.value).name;
             for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
             {
                 auto it2 = it->variables.find(name);
@@ -647,8 +683,8 @@ namespace vwa
                 {
                     bc.push_back({bc::ReadRel});
                     pushToBc<intptr_t>(bc, it2->second.offset);
-                    pushToBc<uint64_t>(bc, getSizeOfType(it2->second.type, it2->second.pointerDepth, cache->structs));
-                    return {it2->second.type, it2->second.pointerDepth};
+                    pushToBc<uint64_t>(bc, cache.getSizeOfType(it2->second.type));
+                    return it2->second.type;
                 }
             }
             log << Logger::Error << "Variable " << name << " not found\n";
@@ -656,55 +692,57 @@ namespace vwa
         }
         case Node::Type::If:
         {
-            auto cond = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            if (auto instr = typeCast(PrimitiveTypes::I64, false, cond.type, cond.pointerDepth, log); instr)
+            auto cond = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(Cache::I64, cond, log); instr)
                 bc.push_back({*instr});
             bc.push_back({bc::JumpRelIfFalse});
             auto pos = bc.size();
             pushToBc<int64_t>(bc, 0);
             // TODO: consider evaluating to value
-            discard(compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log), bc, cache);
-            if (node->children.size() == 3)
+            discard(compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log), bc, cache);
+            if (node.children.size() == 3)
             {
                 bc.push_back({bc::JumpRel});
                 auto pos2 = bc.size();
                 pushToBc<int64_t>(bc, 0);
                 *reinterpret_cast<int64_t *>(&bc[pos]) = bc.size() - pos + 1;
-                discard(compileNode(module, cache, &node->children[2], fRetT, constPool, bc, scopes, log), bc, cache);
+                discard(compileNode(module, linker, node.children[2], fRetT, constPool, bc, scopes, log), bc, cache);
                 *reinterpret_cast<int64_t *>(&bc[pos2]) = bc.size() - pos2 + 1;
             }
             else
                 *reinterpret_cast<int64_t *>(&bc[pos]) = bc.size() - pos + 1;
-            return {};
+            return Cache::Void;
         }
         case Node::Type::While:
         {
             auto pos = bc.size();
-            auto cond = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            if (auto instr = typeCast(PrimitiveTypes::I64, false, cond.type, cond.pointerDepth, log); instr)
+            auto cond = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(Cache::I64, cond, log); instr)
                 bc.push_back({*instr});
             bc.push_back({bc::JumpRelIfFalse});
             auto pos2 = bc.size();
             pushToBc<int64_t>(bc, 0);
-            discard(compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log), bc, cache);
+            discard(compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log), bc, cache);
             bc.push_back({bc::JumpRel});
             pushToBc<int64_t>(bc, pos - bc.size() + 1);
             *reinterpret_cast<int64_t *>(&bc[pos2]) = bc.size() - pos2 + 1;
             // TODO: replace continue and break with correct instruction. This requires having a function which allows skipping instructions.
-            return {};
+            return Cache::Void;
         }
         case Node::Type::Dereference:
         {
-            auto expr = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto expr = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             // TODO: cast int to ptr
+            // FIXME: overflow
             bc.push_back({bc::ReadAbs});
-            pushToBc<uint64_t>(bc, getSizeOfType(expr.type, expr.pointerDepth - 1, cache->structs));
-            return {expr.type, expr.pointerDepth - 1};
+            auto newT = Cache::setPointerDepth(expr, Cache::getPointerDepth(expr - 1));
+            pushToBc<uint64_t>(bc, cache.getSizeOfType(newT));
+            return newT;
         }
         // Only works on local variables
         case Node::Type::AddressOf:
         {
-            auto evalTree = [&](const Node &node, auto &self) -> std::tuple<size_t, size_t, size_t, bool>
+            auto evalTree = [&](const Node &node, auto &self) -> std::tuple<CachedType, size_t, bool>
             {
                 switch (node.type)
                 {
@@ -714,7 +752,7 @@ namespace vwa
                     {
                         auto it2 = it->variables.find(std::get<Identifier>(node.value).name);
                         if (it2 != it->variables.end())
-                            return {it2->second.type, it2->second.pointerDepth, it2->second.offset, false};
+                            return {it2->second.type, it2->second.offset, false};
                     }
                     log << Logger::Error << "Cannot access member\n";
                     throw std::runtime_error("Cannot find variable");
@@ -722,46 +760,46 @@ namespace vwa
                 case Node::Type::MemberAccess:
                 {
                     auto prev = self(node.children[0], self);
-                    if (std::get<1>(prev))
+                    if (std::get<0>(prev) & Cache::pointerDepthMask)
                     {
                         log << Logger::Error << "Cannot access member of ptr\n";
                         throw std::runtime_error("Cannot access member of ptr");
                     }
-                    auto &mem = getMember(std::get<std::string>(node.children[1].value), std::get<0>(prev), *cache);
-                    return {mem.type, mem.ptrDepth, mem.offset + std::get<2>(prev), std::get<3>(prev)};
+                    auto mem = cache.getMemberByName(std::get<0>(prev), std::get<std::string>(node.children[1].value));
+                    auto &m = cache.structs[(std::get<0>(prev) & Cache::indexMask) - Cache::reservedIndicies].members[mem];
+                    return {m.type, m.offset + std::get<1>(prev), std::get<2>(prev)};
                 }
                 case Node::Type::Dereference:
                 {
-                    auto res = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
-                    if (!res.pointerDepth)
+                    auto res = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+                    if (!(res & Cache::pointerDepthMask))
                     {
                         log << Logger::Error << "Cannot dereference non-pointer\n";
                         throw std::runtime_error("Cannot dereference non-pointer");
                     }
-                    return {res.type, res.pointerDepth - 1, 0, true};
+                    return {Cache::setPointerDepth(res, Cache::getPointerDepth(res) - 1), 0, true};
                 }
                 default:
                     log << Logger::Error << "Cannot access member of temporary\n";
                     throw std::runtime_error("Cannot access member of temporary");
                 }
             };
-            auto res = evalTree(node->children[0], evalTree);
-            switch (std::get<3>(res))
+            auto res = evalTree(node.children[0], evalTree);
+            if (std::get<2>(res))
             {
-            case false:
-                bc.push_back({bc::AbsOf});
-                pushToBc<intptr_t>(bc, std::get<2>(res));
-                break;
-            case true:
                 bc.push_back({bc::Push64});
                 // This is probably the wrong sign, but since integers are twos complement this should be fine
-                pushToBc<uint64_t>(bc, std::get<2>(res));
+                pushToBc<uint64_t>(bc, std::get<1>(res));
                 bc.push_back({bc::AddI});
-                break;
             }
-            return {std::get<0>(res), std::get<1>(res) + 1};
+            else
+            {
+                bc.push_back({bc::AbsOf});
+                pushToBc<intptr_t>(bc, std::get<1>(res));
+            }
+            return Cache::setPointerDepth(std::get<0>(res), Cache::getPointerDepth(std::get<0>(res)) + 1);
             // TODO: support structs
-            // auto &name = std::get<Identifier>(node->children[0].value).name;
+            // auto &name = std::get<Identifier>(node.children[0].value).name;
             // for (auto it = scopes.rbegin(); it != scopes.rend(); ++it)
             // {
             //     auto it2 = it->variables.find(name);
@@ -778,64 +816,69 @@ namespace vwa
         case Node::Type::CallFunc:
         {
             // No support for function pointers yet
-            auto &name = std::get<Identifier>(node->children[0].value);
-            auto it = cache->map.find(name);
-            it = it == cache->map.end() ? cache->map.find({name.name, module->name}) : it;
-            if (it == cache->map.end())
+            auto &name = std::get<Identifier>(node.children[0].value);
+            auto it = cache.ids.find(name);
+            // FIXME: this should be done beforehand
+            it = it == cache.ids.end() ? cache.ids.find({name.name, module.name}) : it;
+            if (it == cache.ids.end())
             {
                 log << Logger::Error << "Function " << name.name << " not found\n";
                 throw std::runtime_error("Function not found");
             }
-            if (it->second.second == Cache::Type::Struct)
+            if (!(it->second & Cache::typeMask))
             {
                 log << Logger::Error << "Symbol " << name.name << " is a struct, not a function\n";
                 throw std::runtime_error("Symbol is a struct, not a function");
             }
-            auto &func = cache->functions[it->second.first];
-            auto nArgs = node->children.size() - 1;
-            if (nArgs != func.args.size())
+            auto &func = cache.functions[it->second & Cache::indexMask];
+            auto nArgs = node.children.size() - 1;
+            if (nArgs != func.params.size())
             {
-                log << Logger::Error << "Function " << name.name << " expects " << func.args.size() << " arguments, but got " << nArgs << "\n";
+                log << Logger::Error << "Function " << name.name << " expects " << func.params.size() << " arguments, but got " << nArgs << "\n";
                 throw std::runtime_error("Function expects different number of arguments");
             }
             size_t argSize = 0;
             for (size_t i = 0; i < nArgs; i++)
             {
-                argSize += getSizeOfType(func.args[i].type, func.args[i].pointerDepth, cache->structs);
-                auto arg = compileNode(module, cache, &node->children[i + 1], fRetT, constPool, bc, scopes, log);
-                if (auto instr = typeCast(func.args[i].type, func.args[i].pointerDepth, arg.type, arg.pointerDepth, log); instr)
+                argSize += cache.getSizeOfType(func.params[i]);
+                auto arg = compileNode(module, linker, node.children[i + 1], fRetT, constPool, bc, scopes, log);
+                if (auto instr = typeCast(func.params[i], arg, log); instr)
                     bc.push_back({*instr});
             }
             // There are two reasons for this:
             // First, it might speed up the linker by having to do less lookups, but I am not sure about that
             // Two, it means I can push back development of the linker
-            if (func.finished && func.internal)
-            {
-                bc.push_back({bc::JumpFuncRel});
-                pushToBc<int64_t>(bc, func.address - bc.size() + 1);
-            }
-            else if (auto f = std::get<Linker::Module::Symbol::Function>(func.symbol->data); f.type == Linker::Module::Symbol::Function::Type::External)
+            // FIXME
+            // if (func.finished && func.internal)
+            // {
+            //     bc.push_back({bc::JumpFuncRel});
+            //     pushToBc<int64_t>(bc, func.address - bc.size() + 1);
+            // }
+            // This is not supposed to be done here
+            // else
+            if (auto f = std::get<Linker::Symbol::Function>(func.symbol->data); f.type == Linker::Symbol::Function::Type::External)
             {
                 bc.push_back({bc::JumpFFI});
-                pushToBc<size_t>(bc, f.impl.index);
+                pushToBc<Linker::FFIFunc>(bc, f.ffi);
             }
             else
             {
                 bc.push_back({bc::CallFunc});
-                pushToBc<uint64_t>(bc, it->second.first); // Gets replaced by adress or more permanent index later}
+                // TODO: make sure this gets replaced by a permanent index
+                pushToBc<uint64_t>(bc, it->second & Cache::indexMask); // Gets replaced by adress or more permanent index later}
             }
             pushToBc<uint64_t>(bc, argSize);
-            return {func.returnType.type, func.returnType.pointerDepth};
+            return func.returnType;
         }
 
         // TODO: implement something like decltype to reduce code length
         case Node::Type::SizeOf:
         {
-            auto t = std::get<Node::VarTypeCached>(node->value);
-            auto size = getSizeOfType(t.index, t.pointerDepth, cache->structs);
+            auto t = std::get<CachedType>(node.value);
+            auto size = cache.getSizeOfType(t);
             bc.push_back({bc::Push64});
             pushToBc<int64_t>(bc, size);
-            return {PrimitiveTypes::I64, 0};
+            return Cache::I64;
         }
         case Node::Type::MemberAccess:
         {
@@ -846,7 +889,7 @@ namespace vwa
                 ReadTmp, // Root is a temporary value
             };
 
-            auto walkTree = [&](const Node &node, auto &self) -> std::tuple<Node::VarTypeCached, Type, size_t>
+            auto walkTree = [&](const Node &node, auto &self) -> std::tuple<CachedType, Type, size_t>
             {
                 switch (node.type)
                 {
@@ -858,43 +901,44 @@ namespace vwa
                         {
                             auto it2 = it->variables.find(name);
                             if (it2 != it->variables.end())
-                                return {{it2->second.type, it2->second.pointerDepth}, ReadRel, it2->second.offset};
+                                return {it2->second.type, ReadRel, it2->second.offset};
                         }
                         log << Logger::Error << "Cannot access non-variable yet\n";
                         throw std::runtime_error("Did not find variable");
                     }
                 case Node::Type::Dereference:
                 {
-                    auto val = compileNode(module, cache, &node.children[0], fRetT, constPool, bc, scopes, log);
-                    if (val.pointerDepth == 0)
+                    auto val = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+                    if (!(val & Cache::pointerDepthMask))
                     {
                         log << Logger::Error << "Cannot dereference non-pointer\n";
                         throw std::runtime_error("Cannot dereference non-pointer");
                     }
-                    return {Node::VarTypeCached{val.type, val.pointerDepth - 1}, ReadAbs, 0};
+                    return {Cache::setPointerDepth(val, Cache::getPointerDepth(val) - 1), ReadAbs, 0};
                 }
                 case Node::Type::MemberAccess:
                 {
                     auto [t, type, offset] = self(node.children[0], self);
                     auto &name = std::get<std::string>(node.children[1].value);
-                    if (t.pointerDepth)
+                    if (t & Cache::pointerDepthMask)
                     {
                         log << Logger::Error << "Cannot access member ptr\n";
                         throw std::runtime_error("Cannot access member ptr");
                     }
-                    auto &mem = getMember(name, t.index, *cache);
-                    return {{mem.type, mem.ptrDepth}, type, offset + mem.offset};
+                    auto mem = cache.getMemberByName(t, name);
+                    auto &m = cache.structs[(t & Cache::indexMask) - Cache::reservedIndicies].members[mem];
+                    return {m.type, type, offset + m.offset};
                 }
                 default:
                 {
-                    auto val = compileNode(module, cache, &node, fRetT, constPool, bc, scopes, log);
+                    auto val = compileNode(module, linker, node, fRetT, constPool, bc, scopes, log);
                     bc.push_back({bc::ReadMember});
-                    pushToBc<uint64_t>(bc, getSizeOfType(val.type, val.pointerDepth, cache->structs));
-                    return {{val.type, val.pointerDepth}, ReadTmp, 0};
+                    pushToBc<uint64_t>(bc, cache.getSizeOfType(val));
+                    return {val, ReadTmp, 0};
                 }
                 }
             };
-            auto [t, type, offset] = walkTree(*node, walkTree);
+            auto [t, type, offset] = walkTree(node, walkTree);
             switch (type)
             {
             case ReadAbs:
@@ -910,26 +954,26 @@ namespace vwa
             case ReadTmp:
                 pushToBc<uint64_t>(bc, offset);
             }
-            pushToBc<uint64_t>(bc, getSizeOfType(t.index, t.pointerDepth, cache->structs));
-            return {t.index, t.pointerDepth};
-            // auto &root = node->children[0];
+            pushToBc<uint64_t>(bc, cache.getSizeOfType(t));
+            return t;
+            // auto &root = node.children[0];
             // int64_t offset = 0;
             // auto rootRes = compileNode(module, cache, &root, fRetT, constPool, bc, scopes, log);
             // auto rootRes2 = rootRes;
-            // for (uint i = 1; i < node->children.size(); ++i)
+            // for (uint i = 1; i < node.children.size(); ++i)
             // {
             //     if (rootRes.pointerDepth)
             //     {
             //         log << "Cannot use operator . on a pointer\n";
             //         throw std::runtime_error("Cannot use operator . on a pointer");
             //     }
-            //     auto &child = node->children[i];
+            //     auto &child = node.children[i];
             //     if (child.type != Node::Type::Variable)
             //     {
             //         throw std::runtime_error("Invalid node");
             //     }
             //     auto &name = std::get<Identifier>(child.value).name;
-            //     auto &type = cache->structs[rootRes.type - numReservedIndices];
+            //     auto &type = cache->structs[rootRes.type - Linker::Cache::reservedIndices];
             //     auto &sym = std::get<Linker::Module::Symbol::Struct>(type.symbol->data);
             //     auto field = std::find_if(sym.fields.begin(), sym.fields.end(), [&name](const Linker::Module::Symbol::Struct::Field &f)
             //                               { return f.name == name; });
@@ -940,7 +984,7 @@ namespace vwa
             //         throw std::runtime_error("Field not found");
             //     }
             //     rootRes = {std::get<1>(field->type), field->pointerDepth};
-            //     if (i < node->children.size() - 1)
+            //     if (i < node.children.size() - 1)
             //         offset += getSizeOfType(std::get<1>(field->type), field->pointerDepth, cache->structs);
             // }
             // auto totalSize = getSizeOfType(rootRes2.type, rootRes2.pointerDepth, cache->structs);
@@ -956,100 +1000,112 @@ namespace vwa
         {
             bc.push_back({bc::Break});
             pushToBc<uint64_t>(bc, 0);
-            return {};
+            return Cache::Void;
         }
         case Node::Type::Continue:
         {
             bc.push_back({bc::Continue});
             pushToBc<uint64_t>(bc, 0);
-            return {};
+            return Cache::Void;
         }
         case Node::Type::For:
         {
             // A for statement starts by creating a scope for the loop variable.
             Scope firstScope{0, scopes.back().size + scopes.back().offset};
-            firstScope.variables.insert({std::get<std::string>(node->children[0].children[0].value), {firstScope.offset, std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth}});
-            firstScope.size += getSizeOfType(std::get<Node::VarTypeCached>(node->children[0].children[1].value).index, std::get<Node::VarTypeCached>(node->children[0].children[1].value).pointerDepth, cache->structs);
+            // TODO: this is an ugly hack
+            firstScope.variables.insert({std::get<std::string>(node.children[0].children[0].value), {std::get<CachedType>(node.children[0].children[1].value), firstScope.offset}});
+            firstScope.size += cache.getSizeOfType(std::get<CachedType>(node.children[0].children[1].value));
             scopes.push_back(std::move(firstScope));
+            if (firstScope.size)
+            {
+                bc.push_back({bc::Push});
+                pushToBc<uint64_t>(bc, firstScope.size);
+            }
+
             // Then the initializer is compiled.
-            discard(compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log), bc, cache);
+            discard(compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log), bc, cache);
             // Following that the condition is compiled and it's address is stored for jumping back later.
             auto condAddr = bc.size();
-            auto cond = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            if (auto instr = typeCast(I64, 0, cond.type, cond.pointerDepth, log))
+            auto cond = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            if (auto instr = typeCast(Cache::I64, cond, log))
                 bc.push_back({*instr});
             bc.push_back({bc::JumpRelIfFalse});
             auto jumpAddr = bc.size();
             pushToBc<int64_t>(bc, 0); // This is just a placeholder
             // Then the main body is compiled, this does not necessarily require a new scope, but better safe than sorry
             scopes.push_back({0, scopes.back().size + scopes.back().offset});
-            compileNode(module, cache, &node->children[3], fRetT, constPool, bc, scopes, log);
+            compileNode(module, linker, node.children[3], fRetT, constPool, bc, scopes, log);
             scopes.pop_back();
             // Incrementing happens at the end, followed by an unconditional jump back.
-            discard(compileNode(module, cache, &node->children[2], fRetT, constPool, bc, scopes, log), bc, cache);
-            scopes.pop_back();
+            discard(compileNode(module, linker, node.children[2], fRetT, constPool, bc, scopes, log), bc, cache);
             bc.push_back({bc::JumpRel});
             pushToBc<int64_t>(bc, condAddr - bc.size() + 1);
             // Now that the end position is know, update the jump instruction.
             *reinterpret_cast<int64_t *>(&bc[jumpAddr]) = bc.size() - jumpAddr + 1;
-            return {0, 0};
+            if (firstScope.size)
+            {
+                bc.push_back({bc::Pop});
+                pushToBc<uint64_t>(bc, firstScope.size);
+            }
+            scopes.pop_back();
+            return Cache::Void;
         }
         case Node::Type::LessThan:
         {
-            auto lhs = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
             auto pos = bc.size();
-            auto rhs = compileNode(module, cache, &node->children[1], fRetT, constPool, bc, scopes, log);
-            auto t = promoteType(lhs.type, lhs.pointerDepth, rhs.type, rhs.pointerDepth, bc, pos, log);
-            if (t.pointerDepth)
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto t = promoteType(lhs, rhs, bc, pos, log);
+            if (t & Cache::pointerDepthMask)
                 bc.push_back({bc::LessThanI});
             else
-                switch (t.type)
+                switch (t)
                 {
-                case I64:
+                case Cache::I64:
                     bc.push_back({bc::LessThanI});
                     break;
-                case F64:
+                case Cache::F64:
                     bc.push_back({bc::LessThanF});
                     break;
-                case U8:
+                case Cache::U8:
                     throw std::runtime_error("This should not happen");
                 default:
                     throw std::runtime_error("Can't compare these types");
                 }
-            return {I64, 0};
+            return Cache::I64;
         }
         case Node::Type::Cast:
         {
-            auto expr = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            auto type = std::get<Node::VarTypeCached>(node->children[1].value);
-            if (auto instr = typeCast(type.index, type.pointerDepth, expr.type, expr.pointerDepth, log))
+            auto expr = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto type = std::get<CachedType>(node.children[1].value);
+            if (auto instr = typeCast(type, expr, log))
                 bc.push_back({*instr});
-            return {type.index, type.pointerDepth};
+            return type;
         }
         case Node::Type::TypePun:
         {
-            auto expr = compileNode(module, cache, &node->children[0], fRetT, constPool, bc, scopes, log);
-            auto resT = std::get<Node::VarTypeCached>(node->children[1].value);
-            if (getSizeOfType(expr.type, expr.pointerDepth, cache->structs) != getSizeOfType(resT.index, resT.pointerDepth, cache->structs))
+            auto expr = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto resT = std::get<CachedType>(node.children[1].value);
+            if (cache.getSizeOfType(expr) != cache.getSizeOfType(resT))
             {
                 log << Logger::Error << "Failed to type pun, Types must be of the same size\n";
                 throw std::runtime_error("Failed to type pun, Types must be of the same size");
             }
-            return {resT.index, resT.pointerDepth};
+            return resT;
         }
         case Node::Type::LiteralS:
         {
-            auto &str = std::get<std::string>(node->value);
+            auto &str = std::get<std::string>(node.value);
             pushToConst<int64_t>(constPool, 0);
             for (auto i = str.size() - 1; i + 1 >= 1; --i)
                 pushToConst<int64_t>(constPool, str[i]);
             bc.push_back({bc::AbsOfConst});
             pushToBc<uint64_t>(bc, -bc.size() - constPool.size() + 1);
-            return {I64, 1}; // Should this be a char instead?
+            return Cache::constructType(Cache::SymbolType::Struct, Cache::I64, 1); // Should this be a char instead?
         }
         }
 
-        log << Logger::Error << "Unhandled node type " << static_cast<int>(node->type) << "\n";
+        log << Logger::Error << "Unhandled node type " << static_cast<int>(node.type) << "\n";
         throw std::runtime_error("Unhandled node type");
     }
 }

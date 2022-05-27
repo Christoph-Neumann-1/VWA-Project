@@ -27,16 +27,8 @@ namespace vwa
         }
     }
 
-    // TODO: I really shouldn't have so many structs with the same members.
-    struct NodeResult
-    {
-        size_t type = PrimitiveTypes::Void;
-        uint32_t pointerDepth = 0;
-    };
-
-    // TODO: push to const
-    void
-    compileFunc(Linker::Module *module, Cache *cache, const Pass1Result::Function &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log);
-    NodeResult compileNode(Linker::Module *module, Cache *cache, const Node *node, const NodeResult fRetT, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, std::vector<Scope> &scopes, Logger &log);
-    void GenModBc(Linker::Module *mod, const Pass1Result &pass1, Cache *cache, Logger &log);
+    void compileFunc(Linker::Module &module, Linker &linker, Linker::Symbol &func, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, Logger &log);
+    Linker::Cache::CachedType compileNode(Linker::Module &module, Linker &linker, const Node &node, const Linker::Cache::CachedType fRetT, std::vector<uint8_t> &constPool, std::vector<bc::BcToken> &bc, std::vector<Scope> &scopes, Logger &log);
+    // TODO: do I really need to pass in the linker here or would it be better to load dependencies earlier?
+    void GenModBc(Linker::Module &mod, Linker &linker, Logger &log);
 }

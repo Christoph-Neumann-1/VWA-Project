@@ -8,6 +8,7 @@ namespace vwa
 {
 
     // TODO: proper error handling
+    //TODO remove the old logic for automatic stack setup
     VM::ExitCode VM::exec(const bc::BcToken *bc, uint8_t *basePtr)
     {
         if (!basePtr)
@@ -188,6 +189,7 @@ namespace vwa
                 bc += 9;
                 continue;
             case AddI:
+                //TODO: add in place, without unnecessary push/pop
                 stack.push(stack.pop<int64_t>() + stack.pop<int64_t>());
                 ++bc;
                 continue;
