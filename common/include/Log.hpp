@@ -17,6 +17,8 @@
 
 namespace vwa
 {
+
+
     class Logger
     {
         // Direct mapping of LogLevel to the corresponding stream. Nullptr if disabled.

@@ -27,27 +27,29 @@ namespace vwa
         auto bcSize = bc.size();
         bc.resize(bcSize + constants.size());
         if (!bcSize)
-        {
             log << Logger::Warning << "No code in module\n";
-            return;
-        }
-        // FIXME: offset all later function references
-        for (int64_t i = bcSize - 1; i >= 0 && constants.size(); --i)
+        else
         {
-            bc[i + constants.size()] = bc[i];
-        }
-        {
-            int i = constants.size() - 1, j = 0;
-            while (i + 1 > 0)
+            // FIXME: offset all later function references
+            for (int64_t i = bcSize - 1; i >= 0 && constants.size(); --i)
             {
-                bc[j++] = {constants[i--]};
+                bc[i + constants.size()] = bc[i];
             }
+            {
+                int i = constants.size() - 1, j = 0;
+                while (i + 1 > 0)
+                {
+                    bc[j++] = {constants[i--]};
+                }
+            }
+            // TODO: this should really happen somewhere else, like when patching internal function calls
+            // Better idea, just ignore it and add the offset to everything
+            // for (auto &s : mod.exports)
+            //     if (auto f = std::get_if<0>(&s.data))
+            //         f->idx += constants.size();
         }
-        // TODO: this should really happen somewhere else, like when patching internal function calls
-        for (auto &s : mod.exports)
-            if (auto f = std::get_if<0>(&s.data))
-                f->idx += constants.size();
         mod.data = std::move(bc);
+        mod.offset = constants.size();
     }
 
     // This function inserts the token at the specified position and offsets all following instructions.
@@ -121,7 +123,7 @@ namespace vwa
         // FIXME: implement pointers
         if (resultT == argT || (rP && aP))
             return std::nullopt;
-        if ((!rP && rT == Cache::FPtr) || (!aP && aT == Cache::FPtr))
+        if ((!rP && rI == Cache::FPtr) || (!aP && aI == Cache::FPtr))
         {
             log << Logger::Error << "Cannot cast function pointers, it has no defined representation";
             throw std::runtime_error("Cannot cast function pointer");
@@ -265,6 +267,7 @@ namespace vwa
         }
         bc.push_back(bc::BcToken{bc::Return});
         pushToBc(bc, uint64_t{cache.getSizeOfType(res)});
+        f.type = Linker::Symbol::Function::Compiled;
     }
 
     // First pos is needed if the first args is to be cast
@@ -856,12 +859,12 @@ namespace vwa
             // }
             // This is not supposed to be done here
             // else
-            if (auto f = std::get<Linker::Symbol::Function>(func.symbol->data); f.type == Linker::Symbol::Function::Type::External)
-            {
-                bc.push_back({bc::JumpFFI});
-                pushToBc<Linker::FFIFunc>(bc, f.ffi);
-            }
-            else
+            // if (auto f = std::get<Linker::Symbol::Function>(func.symbol->data); f.type == Linker::Symbol::Function::Type::External)
+            // {
+            //     bc.push_back({bc::JumpFFI});
+            //     pushToBc<Linker::FFIFunc>(bc, f.ffi);
+            // }
+            // else
             {
                 bc.push_back({bc::CallFunc});
                 // TODO: make sure this gets replaced by a permanent index

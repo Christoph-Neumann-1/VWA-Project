@@ -7,6 +7,7 @@
 #include <variant>
 #include <Bytecode.hpp>
 #include <algorithm>
+#include <stdexcept>
 
 // TODO: consider memory mapping modules
 
@@ -22,13 +23,18 @@ namespace vwa
     struct Identifier
     {
         std::string name;
-        std::string module_{}; // TODO: add a constructor
+        std::string module{}; // TODO: add a constructor
 
         bool operator==(const Identifier &other) const
         {
-            return name == other.name && module_ == other.module_;
+            return name == other.name && module == other.module;
         }
     };
+    inline std::ostream &operator<<(std::ostream &s, const Identifier &i)
+    {
+        s << i.module << std::string(":") << i.name;
+        return s;
+    }
     // TODO: make the linker calculate and store the size of symbols to avoid redundant computation
     // TODO: store the position of function calls as possible optimization to reduce the amount of processing needed
     // TODO: store the beginning of the actual code as we don't want to patch the constant section
@@ -43,13 +49,15 @@ namespace std
         // I really hope this works
         size_t operator()(const vwa::Identifier &id) const
         {
-            return hash<string>()(id.name) ^ hash<string>()(id.module_);
+            return hash<string>()(id.name) ^ hash<string>()(id.module);
         }
     };
 }
 
 namespace vwa
 {
+
+    class Logger;
     class Linker
     {
 
@@ -83,6 +91,7 @@ namespace vwa
                 enum Type
                 {
                     Unlinked, // Declared but without any definition
+                    Compiled,//This was compiled to bytecode, but it was never updated to use real adresses
                     Internal, // Definition is somewhere in bytecode
                     External, // Uses the foreign function interface
                 };
@@ -179,9 +188,35 @@ namespace vwa
             std::vector<std::variant<Symbol, Symbol *>> requiredSymbols;
             std::vector<Symbol> exports; // I should rename this
 
-            void patchAddresses();
+            void patchAddresses(Linker &linker);
             void satisfyDependencies(Linker &linker);
-
+            bool isFFI()
+            {
+                return std::holds_alternative<DlHandle>(data);
+            }
+            bc::BcToken *getData()
+            {
+                switch (data.index())
+                {
+                case 2:
+                    return std::get<2>(data).data;
+                case 3:
+                    return std::get<3>(data).data();
+                default:
+                    throw std::runtime_error("Not bytecode");
+                }
+            }
+            size_t getDataSize() const{
+                switch (data.index())
+                {
+                case 2:
+                    return std::get<2>(data).size;
+                case 3:
+                    return std::get<3>(data).size();
+                default:
+                    throw std::runtime_error("Not bytecode");
+                }
+            }
             /* TODO
             Do I need hashes for faster comparisons?
             How do I handle struct Definitions? Do I need to store the entire definition in every module to make sure it is the same at runtime?(Recursively store all structs in use)
@@ -269,6 +304,7 @@ namespace vwa
                     Done
                 };
                 State state{Uninitialized};
+                uint64_t permIndex;
                 // There is no usage counter in here, every module needs to keep track of that itself
                 // I might add an export flag later so that not everything is visible everywhere
             };
@@ -277,9 +313,18 @@ namespace vwa
                 Symbol *symbol{};
                 std::vector<CachedType> params{};
                 CachedType returnType{};
+                uint64_t permIndex;
             };
             std::vector<CachedStruct> structs;
             std::vector<CachedFunction> functions;
+
+            void resetIndices()
+            {
+                for (auto &s : structs)
+                    s.permIndex = -1;
+                for (auto &f : functions)
+                    f.permIndex = -1;
+            }
 
             // Returns the index of the member if found, otherwise ~0
             uint32_t getMemberByName(CachedType type, const std::string &name) const
@@ -309,7 +354,7 @@ namespace vwa
                 case PrimitiveType::U8:
                     return 1;
                 case PrimitiveType::FPtr:
-                    return 8;//Might change later
+                    return 8; // Might change later
                 default:
                     return structs[(type & indexMask) - reservedIndicies].size;
                 }
@@ -344,7 +389,7 @@ namespace vwa
             CachedType typeFromId(const Identifier &id) const
             {
                 // This can probably be removed after profiling
-                //TODO: btw, where am I checking if something is a keyword?
+                // TODO: btw, where am I checking if something is a keyword?
                 if (id.name == "void")
                     return Void;
                 if (id.name == "int")
@@ -353,7 +398,7 @@ namespace vwa
                     return F64;
                 if (id.name == "char")
                     return U8;
-                if(id.name=="function")
+                if (id.name == "function")
                     return FPtr;
                 if (auto it = ids.find(id); it != ids.end())
                     return it->second & typeMask ? invalidType : it->second;

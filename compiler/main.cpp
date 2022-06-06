@@ -89,6 +89,9 @@ int main(int argc, char **argv)
     // For some reason initializer lists don't work with move only types
     // I hope I am allowed to move out of the temporary
     auto compiled = compile(std::move(trees), linker, log);
+    linker.satisfyDependencies();
+    linker.patchAddresses();
+
     // auto compiled = compile(({ std::vector<Linker::Module> tmp; tmp.emplace_back(std::move(tree));std::move(tmp); }), linker, log);
 
     // TODO: call some kind of function to load definitions for functions for which only declarations exist

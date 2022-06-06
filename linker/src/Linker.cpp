@@ -129,9 +129,9 @@ namespace vwa
         auto it = symbols.find(name);
         if (it == symbols.end())
         {
-            if (modules.find(name.module_) == modules.end())
+            if (modules.find(name.module) == modules.end())
             {
-                loadModule(name.module_);
+                loadModule(name.module);
                 it = symbols.find(name);
             }
             if (it == symbols.end())
@@ -144,13 +144,13 @@ namespace vwa
     {
         // FIXME: decide whether this should at least attempt loading anythign
         //  auto it = symbols.find(name);
-        //  if (it == symbols.end() && modules.find(name.module_) == modules.end())
+        //  if (it == symbols.end() && modules.find(name.module) == modules.end())
         //  {
-        //      loadModule(name.module_);
+        //      loadModule(name.module);
         //      it = symbols.find(name);
         //  }
         auto r = symbols.find(name);
-        return r==symbols.end()?nullptr: r->second;
+        return r == symbols.end() ? nullptr : r->second;
     }
 
     Linker::Module &Linker::getModule(const std::string &name)
@@ -166,11 +166,10 @@ namespace vwa
         return it->second;
     }
 
-    Linker::Module* Linker::tryFind(const std::string &name)
+    Linker::Module *Linker::tryFind(const std::string &name)
     {
         return &modules.find(name)->second;
     }
-
 
     void Linker::loadModule(const std::string &name)
     {
@@ -179,18 +178,70 @@ namespace vwa
 
     void Linker::Module::satisfyDependencies(Linker &linker)
     {
-        for (auto &import : requiredSymbols)
+        for (auto it = requiredSymbols.begin(); it != requiredSymbols.end();++it)
         {
-            auto &sym = std::get<0>(import);
+            auto &sym = std::get<0>(*it);
             auto &newSym = linker.getSymbol(sym.name);
             if (sym != newSym)
                 throw std::runtime_error("The definiton of " + sym.name.name + "does not match the one used for compilation");
+            *it = &newSym;
+        }
+    }
+
+    void Linker::Module::patchAddresses(Linker &linker)
+    {
+        // If ffi dispatch handler
+
+        if(std::holds_alternative<DlHandle>(data))
+        {
+            return;
+            // TODO: someone should really notify the module of this
+        }
+
+        auto begin = getData();
+
+        for (auto it = offset; it < getDataSize(); it += bc::getInstructionSize(it[begin].instruction))
+        {
+            if (begin[it].instruction == bc::CallFunc)
+            {
+                auto &payload = *reinterpret_cast<uint64_t *>(begin + it + 1);
+                auto &sym = *std::get<1>(requiredSymbols[payload]);
+                auto &f = std::get<0>(sym.data);
+                switch (f.type)
+                {
+                case Symbol::Function::Compiled:
+                {
+                    f.type = f.Internal;
+                    f.bcAddress = f.idx + linker.modules[sym.name.module].getData() + linker.modules[sym.name.module].offset;
+                    // There need not be any checks here for internal functions, as that would be done earlier if I so desired
+                    // Though it would probably help to move this conditional somewhere else
+                    [[fallthrough]];
+                }
+                case Symbol::Function::Internal:
+                {
+                    begin[it] = {bc::JumpFuncAbs};
+                    payload = reinterpret_cast<uint64_t>(f.bcAddress);
+                    break;
+                }
+                case Symbol::Function::External:
+                {
+                    it[begin] = {bc::JumpFFI};
+                    payload = reinterpret_cast<uint64_t>(f.ffi);
+                    break;
+                }
+                default:
+                    throw std::runtime_error("Undefined function");
+                    // FIXME: before this step, all indices must somehow be resolved to actual adresses.}
+                }
+            }
         }
     }
 
     void Linker::patchAddresses()
     {
-        // TODO
-        throw std::runtime_error("Not implemented");
+        // TODO what happens when realizing the implementation is unavailable?
+        // Should satisfyDepependencies by called beforehand?
+        for (auto &m : modules)
+            m.second.patchAddresses(*this);
     }
 };

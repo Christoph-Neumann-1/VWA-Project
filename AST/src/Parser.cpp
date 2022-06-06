@@ -162,9 +162,9 @@ namespace vwa
     {
         VarType result;
         auto &name = std::get<std::string>(tokens[pos++].value);
-        if(tokens[pos].type==Token::Type::double_colon)
+        if(tokens[pos].type==Token::Type::colon)
         {
-            result.name.module_=name;
+            result.name.module=name;
             result.name.name=std::get<std::string>(tokens[++pos].value);
             ++pos;
         }
@@ -524,7 +524,7 @@ namespace vwa
             Identifier id;
             if (tokens[pos].type == Token::Type::double_colon)
             {
-                id.module_ = name;
+                id.module = name;
                 id.name = std::get<std::string>(tokens[++pos].value);
                 ++pos;
             }
@@ -562,7 +562,7 @@ namespace vwa
         // Identifier id;
         // if (tokens[pos].type == Token::Type::double_colon)
         // {
-        //     id.module_ = name;
+        //     id.module = name;
         //     id.name = std::get<std::string>(tokens[++pos].value);
         //     ++pos;
         // }

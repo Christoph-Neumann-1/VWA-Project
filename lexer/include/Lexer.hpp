@@ -29,8 +29,8 @@ namespace vwa
 
             comma,
             semicolon,
-            colon,
-            double_colon, // Namespace
+            colon,// Namespace
+            double_colon, 
 
             dot,
             plus,
