@@ -117,10 +117,10 @@ namespace vwa
                         }; // This is used when linking together two ffi modules, they can just call each other directly without relying on the stack. This may be null, in that case a wrapper is generated instead
                     };
                 };
-
+                //Does not check if it points to the same definition
                 bool operator==(const Symbol::Function &other) const
                 {
-                    return params == other.params && returnType == other.returnType && type == other.type;
+                    return params == other.params && returnType == other.returnType;
                 }
             };
 

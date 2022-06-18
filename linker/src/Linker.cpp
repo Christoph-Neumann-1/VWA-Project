@@ -213,6 +213,7 @@ namespace vwa
                 {
                     f.type = f.Internal;
                     f.bcAddress = f.idx + linker.modules[sym.name.module].getData() + linker.modules[sym.name.module].offset;
+                    //This abomination needs to be corrected.
                     // There need not be any checks here for internal functions, as that would be done earlier if I so desired
                     // Though it would probably help to move this conditional somewhere else
                     [[fallthrough]];
