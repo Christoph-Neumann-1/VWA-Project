@@ -5,7 +5,7 @@ namespace vwa
 {
 
     using Symbol = Linker::Symbol;
-    using Module=Linker::Module;
+    using Module = Linker::Module;
     using Function = Symbol::Function;
     using Struct = Linker::Symbol::Struct;
     using VarType = Linker::VarType;
@@ -105,7 +105,7 @@ namespace vwa
         result.fields = parseParameterList(tokens, ++pos);
         if (tokens[pos++].type != Token::Type::rbrace)
             throw std::runtime_error("Expected } after struct");
-        return {{.name=name}, result};
+        return {{.name = name}, result};
     }
 
     [[nodiscard]] static std::vector<Field> parseParameterList(const std::vector<Token> &tokens, size_t &pos)
@@ -141,7 +141,7 @@ namespace vwa
         auto &name = std::get<std::string>(tokens[pos].value);
         if (tokens[++pos].type != Token::Type::lparen)
             throw std::runtime_error("Expected ( after func");
-        result.params=parseParameterList(tokens, ++pos);
+        result.params = parseParameterList(tokens, ++pos);
         if (tokens[pos++].type != Token::Type::rparen)
             throw std::runtime_error("Expected ) after func");
         if (tokens[pos].type == Token::Type::arrow_)
@@ -154,7 +154,7 @@ namespace vwa
         else
             result.returnType = {{"void"}, 0};
         result.node = new Node{parseStatement(tokens, pos)};
-        return {{.name=name},result};
+        return {{.name = name}, result};
     }
 
     // Assumes that the first token is a id
@@ -162,14 +162,14 @@ namespace vwa
     {
         VarType result;
         auto &name = std::get<std::string>(tokens[pos++].value);
-        if(tokens[pos].type==Token::Type::colon)
+        if (tokens[pos].type == Token::Type::colon)
         {
-            result.name.module=name;
-            result.name.name=std::get<std::string>(tokens[++pos].value);
+            result.name.module = name;
+            result.name.name = std::get<std::string>(tokens[++pos].value);
             ++pos;
         }
         else
-            result.name.name=name;
+            result.name.name = name;
         for (; tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::double_asterix; ++pos)
             result.pointerDepth += tokens[pos].type == Token::Type::asterix ? 1 : 2;
         // if (result.name.name == "string")
@@ -491,6 +491,15 @@ namespace vwa
             auto line = tokens[pos].line;
             return {Node::Type::TypePun, {}, {std::move(what), {Node::Type::Type, {parseType(tokens, ++pos)}, {}, line}}, line};
         }
+        // fixme: I do not know if this is correct here, might need to rewrite my grammar
+        case Token::Type::lbracket:
+        {
+            auto inner = parseExpression(tokens, ++pos);
+            if(tokens[pos++].type!=Token::Type::rbracket)
+                throw std::runtime_error("Expected ]");
+            return {
+                Node::Type::Dereference, {}, {{Node::Type::Plus, {}, {std::move(what), inner}, tokens[pos].line}}, tokens[pos].line};
+        }
         default:
             return what;
         }
@@ -542,6 +551,7 @@ namespace vwa
             }
             return parseId(std::move(result), tokens, pos);
         }
+        // Now that I think of it, does this need to be all the way down here?
         case Token::Type::size_of:
         {
             auto type = parseType(tokens, ++pos);
