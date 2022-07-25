@@ -405,7 +405,7 @@ namespace vwa
             else if (aP)
                 if (bP)
                     throw std::runtime_error("Cannot add pointers");
-                else if (bP == Cache::I64)
+                else if (bI == Cache::I64)
                 {
                     bc.push_back({bc::AddI});
                     return lhs;
@@ -413,7 +413,8 @@ namespace vwa
                 else
                     throw std::runtime_error("Cannot add pointers");
             else if (bP)
-                if (aP)
+            //Idk what I am doing
+                if (aI==Cache::I64)
                 {
                     // TODO this is a horrible solution, I really need to find out if this is a safe thing to do
                     bc.push_back({bc::AddI});
