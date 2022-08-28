@@ -143,7 +143,7 @@
 // #define CONCAT_IMPL(a, b) a##b
 
 // using namespace vwa;
-vwa::Linker::Module mod;
+// vwa::Linker::Module mod;
 // #define ExportFunctionAs(f, name)                                                                                                                                                                                        \
 //     namespace                                                                                                                                                                                                            \
 //     {                                                                                                                                                                                                                    \
@@ -230,7 +230,7 @@ void print(int64_t *str)
 // TODO: do I need ALL of these?
 //  Don't call this more than once
 //  Returns all symbols and imports
-extern "C" vwa::Linker::Module *MODULE_LOAD()
+extern "C" vwa::Linker::Module MODULE_LOAD()
 {
     // printf(ColorD("Debug:") ResetColor "Loading std library\n");
     // mod.exportedSymbols.push_back({"add", Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = add}, {{"int", 0}, {"int", 0}}, {"int", 0}, false}});
@@ -238,9 +238,11 @@ extern "C" vwa::Linker::Module *MODULE_LOAD()
     // mod.exportedSymbols.push_back({Identifier{"intArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(intArray)}, {{{"int"}, 0}}, {{"int"}, 1}, false}});
     // mod.exportedSymbols.push_back({Identifier{"delIntArray"}, Linker::Module::Symbol::Function{Linker::Module::Symbol::Function::Type::External, {.ffi = WRAP_FUNC(delIntArray)}, {{{"int"}, 1}}, {{"void"}, 0}, false}});
     using namespace vwa;
+    vwa::Linker::Module mod;
+    mod.name = "std";
     mod.exports.push_back(Linker::Symbol{{"print", "std"}, Linker::Symbol::Function{
                                                                .type = Linker::Symbol::Function::External,
-                                                               .params = {{"", {{"string"}, 0}, false}},
+                                                               .params = {{"", {{"string"}, 0}}},
                                                                .returnType = {{"void"}, 0},
                                                                .ffi = [](VM *vm)
                                                                {
@@ -248,7 +250,7 @@ extern "C" vwa::Linker::Module *MODULE_LOAD()
                                                                },
                                                                .ffi_direct = reinterpret_cast<void *>(print),
                                                            }});
-    return &mod;
+    return mod;
 }
 
 // Gets called after linking, in here function pointers are resolved

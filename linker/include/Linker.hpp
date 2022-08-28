@@ -8,6 +8,8 @@
 #include <Bytecode.hpp>
 #include <algorithm>
 #include <stdexcept>
+#include <memory>
+#include <cstring>
 
 // TODO: consider memory mapping modules
 
@@ -62,7 +64,6 @@ namespace vwa
     {
 
     public:
-        // TODO: remove second parameter
         using FFIFunc = void (*)(VM *vm);
         struct VarType
         {
@@ -80,10 +81,11 @@ namespace vwa
             {
                 std::string name;
                 VarType type;
-                bool isMutable{1}; // Ignored as of right now
+                // bool isMutable{1}; // Ignored as of right now
                 bool operator==(const Field &other) const
                 {
-                    return name == other.name && type == other.type && isMutable == other.isMutable;
+                    return name == other.name && type == other.type;
+                    // &&isMutable == other.isMutable;
                 }
             };
             struct Function
@@ -91,7 +93,7 @@ namespace vwa
                 enum Type
                 {
                     Unlinked, // Declared but without any definition
-                    Compiled,//This was compiled to bytecode, but it was never updated to use real adresses
+                    Compiled, // This was compiled to bytecode, but it was never updated to use real adresses
                     Internal, // Definition is somewhere in bytecode
                     External, // Uses the foreign function interface
                 };
@@ -117,10 +119,15 @@ namespace vwa
                         }; // This is used when linking together two ffi modules, they can just call each other directly without relying on the stack. This may be null, in that case a wrapper is generated instead
                     };
                 };
-                //Does not check if it points to the same definition
+                // Does not check if it points to the same definition
                 bool operator==(const Symbol::Function &other) const
                 {
-                    return params == other.params && returnType == other.returnType;
+                    if (params.size() != other.params.size())
+                        return false;
+                    for (size_t i = 0; i < params.size(); i++)
+                        if (params[i].type != other.params[i].type)
+                            return false;
+                    return returnType == other.returnType;
                 }
             };
 
@@ -186,7 +193,7 @@ namespace vwa
             size_t offset{~0ul}; // Offset where the actual code starts, before that are the constants
             // TODO: how do I avoid duplicates here?
             std::vector<std::variant<Symbol, Symbol *>> requiredSymbols;
-            std::vector<Symbol> exports; // I should rename this
+            std::vector<Symbol> exports; // should I rename this?
 
             void patchAddresses(Linker &linker);
             void satisfyDependencies(Linker &linker);
@@ -206,7 +213,20 @@ namespace vwa
                     throw std::runtime_error("Not bytecode");
                 }
             }
-            size_t getDataSize() const{
+            const bc::BcToken *getData() const
+            {
+                switch (data.index())
+                {
+                case 2:
+                    return std::get<2>(data).data;
+                case 3:
+                    return std::get<3>(data).data();
+                default:
+                    throw std::runtime_error("Not bytecode");
+                }
+            }
+            size_t getDataSize() const
+            {
                 switch (data.index())
                 {
                 case 2:
@@ -216,6 +236,16 @@ namespace vwa
                 default:
                     throw std::runtime_error("Not bytecode");
                 }
+            }
+            bool operator==(const Module &other)
+            {
+                if (name != other.name || offset != other.offset || requiredSymbols != other.requiredSymbols || exports != other.exports || data.index() != other.data.index())
+                    return false;
+                if (std::holds_alternative<std::monostate>(data) || (std::holds_alternative<DlHandle>(data) && std::get<DlHandle>(data).data == std::get<DlHandle>(other.data).data))
+                    return true;
+                if (getDataSize() != other.getDataSize())
+                    return false;
+                return !std::memcmp(getData(), other.getData(), getDataSize());
             }
             /* TODO
             Do I need hashes for faster comparisons?
@@ -234,6 +264,20 @@ namespace vwa
         void patchAddresses();
 
         void loadModule(const std::string &name);
+
+        const bc::BcToken *findMain()
+        {
+            const bc::BcToken *ret{0};
+            for (auto &module : modules)
+                for (auto &e : module.second.exports)
+                    if (e.name.name == "main")
+                    {
+                        if (ret)
+                            return reinterpret_cast<const bc::BcToken *>(~0ul);
+                        ret = std::get<Symbol::Function>(e.data).bcAddress;
+                    }
+            return ret;
+        }
 
         struct SymbolNotFound : std::exception
         {
@@ -255,6 +299,10 @@ namespace vwa
             if (sym != symbol)
                 throw SymbolNotFound(symbol.name.name);
         }
+
+        std::string serialize(const Module &);
+        static Module deserialize(std::string_view in);
+
         // TODO: try to transfer some of these ideas to the vm
         struct Cache
         {
@@ -304,7 +352,7 @@ namespace vwa
                     Done
                 };
                 State state{Uninitialized};
-                uint64_t permIndex;
+                uint64_t permIndex{~0ul};
                 // There is no usage counter in here, every module needs to keep track of that itself
                 // I might add an export flag later so that not everything is visible everywhere
             };
@@ -313,7 +361,7 @@ namespace vwa
                 Symbol *symbol{};
                 std::vector<CachedType> params{};
                 CachedType returnType{};
-                uint64_t permIndex;
+                uint64_t permIndex{~0ul};
             };
             std::vector<CachedStruct> structs;
             std::vector<CachedFunction> functions;
@@ -390,24 +438,32 @@ namespace vwa
             {
                 // This can probably be removed after profiling
                 // TODO: btw, where am I checking if something is a keyword?
-                if (id.name == "void")
-                    return Void;
-                if (id.name == "int")
-                    return I64;
-                if (id.name == "float")
-                    return F64;
-                if (id.name == "char")
-                    return U8;
-                if (id.name == "function")
-                    return FPtr;
+                // if (id.name == "void")
+                //     return Void;
+                // if (id.name == "int")
+                //     return I64;
+                // if (id.name == "float")
+                //     return F64;
+                // if (id.name == "char")
+                //     return U8;
+                // if (id.name == "function")
+                //     return FPtr;
                 if (auto it = ids.find(id); it != ids.end())
-                    return it->second & typeMask ? invalidType : it->second;
+                    // return it->second & typeMask ? invalidType : it->second; so maybe this served some purpose, but it is causing problems
+                    // FIXME: I realized that setting the pointer depth directly is unsafe when using aliased types, like strings
+                    return it->second;
                 return invalidType;
             }
 
-            static constexpr CachedType setPointerDepth(CachedType type, uint64_t depth)
+            CachedType typeFromVarType(const VarType &type) const
             {
-                return (type & ~pointerDepthMask) | ((depth << 32) & pointerDepthMask);
+                auto t = typeFromId(type.name);
+                return setPointerDepth(t, getPointerDepth(t) + type.pointerDepth);
+            }
+
+            static constexpr CachedType setPointerDepth(CachedType type, uint32_t depth)
+            {
+                return (type & ~pointerDepthMask) | ((uint64_t{depth} << 32) & pointerDepthMask);
             }
 
             // type,pointerDepth,index

@@ -3,7 +3,10 @@
 #include <sys/mman.h>
 #include <stdexcept>
 #include <unistd.h>
-
+#include <sstream>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 namespace vwa
 {
 
@@ -173,12 +176,26 @@ namespace vwa
 
     void Linker::loadModule(const std::string &name)
     {
-        throw std::runtime_error(__func__);
+        // throw std::runtime_error(__func__);
+        // FIXME I should really cache this
+        for (auto &file : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
+        {
+            if (file.is_regular_file() && file.path().filename() == name + ".bc")
+            {
+                std::ifstream t(file.path());
+                t.seekg(0, std::ios::end);
+                size_t size = t.tellg();
+                t.seekg(0);
+                std::unique_ptr<char[]> buf(new char[size]);
+                t.read(buf.get(), size);
+                provideModule(deserialize(std::string_view(buf.get(), size)));
+            }
+        }
     }
 
     void Linker::Module::satisfyDependencies(Linker &linker)
     {
-        for (auto it = requiredSymbols.begin(); it != requiredSymbols.end();++it)
+        for (auto it = requiredSymbols.begin(); it != requiredSymbols.end(); ++it)
         {
             auto &sym = std::get<0>(*it);
             auto &newSym = linker.getSymbol(sym.name);
@@ -192,7 +209,7 @@ namespace vwa
     {
         // If ffi dispatch handler
 
-        if(std::holds_alternative<DlHandle>(data))
+        if (std::holds_alternative<DlHandle>(data))
         {
             return;
             // TODO: someone should really notify the module of this
@@ -212,10 +229,11 @@ namespace vwa
                 case Symbol::Function::Compiled:
                 {
                     f.type = f.Internal;
+                    // This seems pretty inefficient
                     f.bcAddress = f.idx + linker.modules[sym.name.module].getData() + linker.modules[sym.name.module].offset;
-                    //This abomination needs to be corrected.
-                    // There need not be any checks here for internal functions, as that would be done earlier if I so desired
-                    // Though it would probably help to move this conditional somewhere else
+                    // This abomination needs to be corrected.
+                    //  There need not be any checks here for internal functions, as that would be done earlier if I so desired
+                    //  Though it would probably help to move this conditional somewhere else
                     [[fallthrough]];
                 }
                 case Symbol::Function::Internal:
@@ -236,6 +254,23 @@ namespace vwa
                 }
             }
         }
+        for (auto &sym : exports)
+            if (auto it = std::get_if<Symbol::Function>(&sym.data); it)
+            {
+                switch (it->type)
+                {
+                case Symbol::Function::Unlinked:
+                    throw std::runtime_error("Missing function definition for " + sym.name.name);
+                case Symbol::Function::Compiled:
+                    it->bcAddress = getData() + offset + it->idx;
+                    it->type = Symbol::Function::Internal;
+                case Symbol::Function::Internal:
+                    // Shouldn't be possible, but why not. If it works then it works
+                    break;
+                case Symbol::Function::External:
+                    throw std::runtime_error("broken module");
+                }
+            }
     }
 
     void Linker::patchAddresses()
@@ -244,5 +279,291 @@ namespace vwa
         // Should satisfyDepependencies by called beforehand?
         for (auto &m : modules)
             m.second.patchAddresses(*this);
+    }
+
+    std::string Linker::serialize(const Module &mod)
+    {
+        // TODO: hashes to go faster
+
+        // TODO: add concepts to constrain input
+        auto emplaceLength = [](auto &stream, auto length)
+        {
+            for (size_t i = 0; i < sizeof(length); i++)
+                stream << i[(char *)&length];
+        };
+        auto emplaceString = [&emplaceLength](auto &stream, const std::string &str)
+        {
+            emplaceLength(stream, str.length());
+            stream << str;
+        };
+        // TODO: no qualified name for builtins
+        auto emplaceQualified = [&emplaceString](auto &stream, const Identifier &id)
+        {
+            emplaceString(stream, id.name);
+            emplaceString(stream, id.module);
+        };
+        auto emplaceType = [&emplaceQualified, &emplaceLength](auto &stream, const VarType &t)
+        {
+            emplaceQualified(stream, t.name);
+            emplaceLength(stream, t.pointerDepth);
+        };
+        auto dumpBin = [](auto &stream, const auto *data, const size_t size)
+        {
+            for (size_t i = 0; i < size; i++)
+                stream << i[(char *)data];
+        };
+
+        std::stringstream output;
+        output << "VWA_MODULE";
+        // auto n_l = mod.name.length();
+        // char *n_lp = static_cast<char *>(static_cast<void *>(&n_l));
+        // output << 0 [n_lp] << 1 [n_lp] << 2 [n_lp] << 3 [n_lp] << 4 [n_lp] << 5 [n_lp] << 6 [n_lp] << 7 [n_lp] << '\n';
+        // emplaceLength(output, mod.name.length());
+        // output << mod.name << '\n';
+        emplaceString(output, mod.name);
+        if (mod.exports.size())
+        {
+            output << 'E';
+            emplaceLength(output, mod.exports.size()); // To allow preallocation of vector
+            for (auto &e : mod.exports)
+            {
+                bool isStruct = std::holds_alternative<Symbol::Struct>(e.data);
+                output << (isStruct ? "S" : "F");
+                emplaceString(output, e.name.name);
+                if (isStruct)
+                {
+                    auto &s = std::get<Symbol::Struct>(e.data);
+                    emplaceLength(output, s.fields.size());
+                    for (auto &f : s.fields)
+                    {
+                        emplaceString(output, f.name);
+                        emplaceType(output, f.type);
+                        // FIXME: make sure I'm dealing with implicit module names properly e.g foo instead of module::foo
+                    }
+                }
+                else
+                {
+                    auto &f = std::get<Symbol::Function>(e.data);
+                    emplaceType(output, f.returnType);
+                    emplaceLength(output, f.params.size());
+                    for (auto &p : f.params)
+                        emplaceType(output, p.type);
+                    emplaceLength(output, f.idx);
+                }
+            }
+        }
+        if (mod.requiredSymbols.size())
+        {
+            output << 'I';
+            emplaceLength(output, mod.requiredSymbols.size()); // To allow preallocation of vector
+            for (auto &e : mod.requiredSymbols)
+            {
+                auto &sym = std::get<Symbol>(e);
+                bool isStruct = std::holds_alternative<Symbol::Struct>(sym.data);
+                output << (isStruct ? "S" : "F");
+                emplaceQualified(output, sym.name);
+                if (isStruct)
+                {
+                    auto &s = std::get<Symbol::Struct>(sym.data);
+                    emplaceLength(output, s.fields.size());
+                    for (auto &f : s.fields)
+                    {
+                        emplaceString(output, f.name);
+                        emplaceType(output, f.type);
+                        // FIXME: make sure I'm dealing with implicit module names properly e.g foo instead of module::foo
+                    }
+                }
+                else
+                {
+                    auto &f = std::get<Symbol::Function>(sym.data);
+                    emplaceType(output, f.returnType);
+                    emplaceLength(output, f.params.size());
+                    for (auto &p : f.params)
+                        emplaceType(output, p.type);
+                }
+            }
+        }
+        if (mod.getDataSize())
+        {
+            output << 'C';
+            emplaceLength(output, mod.offset);
+            emplaceLength(output, mod.getDataSize());
+            // auto d_l = mod.getDataSize();
+            // auto dlp = (char *)&d_l;
+            // output << 0 [dlp] << 1 [dlp] << 2 [dlp] << 3 [dlp] << 4 [dlp] << 5 [dlp] << 6 [dlp] << 7 [dlp] << '\n';
+            // auto dp = mod.getData();
+            // for (size_t i = 0; i < d_l; i++)
+            //     output << (dp++)->value;
+            dumpBin(output, mod.getData(), mod.getDataSize());
+        }
+        return output.str();
+    }
+
+    Linker::Module Linker::deserialize(std::string_view in)
+    {
+        size_t pos{};
+        auto requireLength = [&pos, in](size_t l)
+        {if(pos+l>in.length())throw std::runtime_error("deserialization failed, unexpected eof") ; };
+        auto readSize = [&pos, in, &requireLength]() -> uint64_t
+        {
+            requireLength(sizeof(uint64_t));
+            // uint64_t r;
+            // for (size_t i = 0; i < sizeof(uint64_t); i++)
+            //     i[(char *)&r] = in[pos++];
+            uint64_t r = *(const uint64_t *)&in[pos];
+            pos += sizeof(uint64_t);
+            return r;
+            // I should just cast to int pointer here or sthg
+        };
+        auto readSize32 = [&pos, in, &requireLength]() -> uint32_t
+        {
+            requireLength(sizeof(uint32_t));
+            // uint32_t r;
+            // for (size_t i = 0; i < sizeof(uint32_t); i++)
+            //     i[(char *)&r] = in[pos++];
+            // return r;
+            uint32_t r = *(const uint32_t *)&in[pos];
+            pos += sizeof(uint32_t);
+            return r;
+        };
+        auto readStr = [&pos, in, &readSize, &requireLength]() -> std::string_view
+        {
+            auto l = readSize();
+            requireLength(l);
+            auto s = in.substr(pos, l);
+            pos += l;
+            return s;
+        };
+        auto readQualified = [&readStr]() -> Identifier
+        {
+            return {std::string{readStr()}, std::string{readStr()}};
+        };
+        auto readType = [&readQualified, &readSize32]() -> VarType
+        {
+            return {readQualified(), readSize32()};
+        };
+
+        requireLength(sizeof("VWA_MODULE") - 1);
+        if (in.substr(pos, sizeof("VWA_MODULE") - 1) != "VWA_MODULE")
+            throw std::runtime_error("Missing VWA_MODULE. Not valid");
+        pos += sizeof("VWA_MODULE") - 1;
+        Module ret;
+        ret.name = readStr();
+        bool hadExports{0}, hadImports{0}, hadCode{0};
+        // Ok, so make this handle unordered sections and maybe no sections at all if some moron compiles an empty module
+        for (int i = 0; i < 3; i++)
+        {
+            if (pos == in.length())
+                return ret;
+            switch (in[pos++])
+            {
+            case 'E':
+            {
+                if (hadExports)
+                    throw std::runtime_error("Duplicate section");
+                hadExports = 1;
+                auto l = readSize();
+                ret.exports.reserve(l);
+                while (l--)
+                {
+                    requireLength(1);
+                    auto t = in[pos++];
+                    auto name = readStr();
+                    switch (t)
+                    {
+                    case 'F':
+                    {
+                        ret.exports.push_back(Symbol{{std::string{name}, ret.name}, {Symbol::Function{}}});
+                        auto &f = std::get<Symbol::Function>(ret.exports.back().data);
+                        f.returnType = readType();
+                        auto pl = readSize();
+                        f.params.reserve(pl);
+                        for (; pl--;)
+                            f.params.push_back({.type = readType()});
+                        f.idx = readSize();
+                        f.type = Symbol::Function::Compiled;
+                        break;
+                    }
+                    case 'S':
+                    {
+                        ret.exports.push_back(Symbol{{std::string{name}, ret.name}, {Symbol::Struct{}}});
+                        auto &s = std::get<Symbol::Struct>(ret.exports.back().data);
+                        auto fl = readSize();
+                        s.fields.reserve(fl);
+                        for (; fl--;)
+                            s.fields.push_back({std::string{readStr()}, readType()});
+                        break;
+                    }
+                    default:
+                        throw std::runtime_error("Expected Function or struct");
+                    }
+                }
+                break;
+            }
+            case 'I':
+            {
+                if (hadImports)
+                    throw std::runtime_error("Duplicate section");
+                hadImports = 1;
+                auto l = readSize();
+                ret.requiredSymbols.reserve(l);
+                while (l--)
+                {
+                    requireLength(1);
+                    auto t = in[pos++];
+                    auto name = readQualified();
+                    switch (t)
+                    {
+                    case 'F':
+                    {
+                        ret.requiredSymbols.push_back(Symbol{std::move(name), {Symbol::Function{}}});
+                        auto &f = std::get<Symbol::Function>(std::get<Symbol>(ret.requiredSymbols.back()).data);
+                        f.returnType = readType();
+                        auto pl = readSize();
+                        f.params.reserve(pl);
+                        for (; pl--;)
+                            f.params.push_back({.type = readType()});
+                        f.type = Symbol::Function::Unlinked;
+                        break;
+                    }
+                    case 'S':
+                    {
+                        ret.requiredSymbols.push_back(Symbol{std::move(name), {Symbol::Struct{}}});
+                        auto &s = std::get<Symbol::Struct>(std::get<Symbol>(ret.requiredSymbols.back()).data);
+                        auto fl = readSize();
+                        s.fields.reserve(fl);
+                        for (; fl--;)
+                            s.fields.push_back({std::string{readStr()}, readType()});
+                        break;
+                    }
+                    default:
+                        throw std::runtime_error("Expected Function or struct");
+                    }
+                }
+                break;
+            }
+            case 'C':
+            {
+                // TODO: save the offset? Done
+                if (hadCode)
+                    // TODO: implemente memory mapping for code
+                    throw std::runtime_error("Duplicate section");
+                hadCode = 1;
+                ret.offset = readSize();
+                auto data = readStr();
+                std::vector<bc::BcToken> d;
+                d.resize(data.size());
+                std::memcpy(d.data(), data.data(), data.size());
+                ret.data = std::move(d);
+                break;
+            }
+            default:
+                throw std::runtime_error("Invalid section header");
+            }
+        }
+        if (pos != in.length())
+            throw std::runtime_error("Expected end of file");
+        // return *provideModule(std::move(ret));
+        return ret;
     }
 };

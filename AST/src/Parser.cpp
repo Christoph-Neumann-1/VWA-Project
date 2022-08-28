@@ -116,8 +116,8 @@ namespace vwa
             if (tokens[pos].type != Token::Type::mut_ && tokens[pos].type != Token::Type::id)
                 break;
             Field f;
-            f.isMutable = tokens[pos].type == Token::Type::mut_;
-            pos += f.isMutable;
+            // f.isMutable = tokens[pos].type == Token::Type::mut_;
+            pos += tokens[pos].type == Token::Type::mut_;
             if (tokens[pos].type != Token::Type::id)
                 throw std::runtime_error("Expected identifier parameter declaration");
             f.name = std::get<std::string>(tokens[pos].value);

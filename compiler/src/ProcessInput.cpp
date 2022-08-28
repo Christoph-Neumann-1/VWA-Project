@@ -48,6 +48,24 @@ namespace vwa
     // TODO: deduplicate constant pool:
     // TODO: make sure the chache exists at this point
 
+    void recurseStruct(Linker::Module &module, Linker &linker, Logger &log, Linker::Cache::CachedType struc)
+    {
+        if ((struc & Linker::Cache::indexMask) < Linker::Cache::reservedIndicies)
+            return;
+        auto &s = linker.cache.structs[Linker::Cache::indexMask & struc - Linker::Cache::reservedIndicies];
+        if (!~s.permIndex)
+        {
+            //This will add some redundant calls, but reduce runtime bloat
+            if (s.symbol->name.module.size() && s.symbol->name.module != module.name)
+            {
+                s.permIndex = module.requiredSymbols.size();
+                module.requiredSymbols.push_back(*s.symbol);
+            }
+            for (auto &m : s.members)
+                recurseStruct(module, linker, log, Linker::Cache::getIndex(m.type));
+        }
+    }
+
     /**
      * @brief Replace internal functions with relative jumps and replace all external calls with more permanent indidices
      *
@@ -70,9 +88,10 @@ namespace vwa
                 uint64_t &payload = *reinterpret_cast<uint64_t *>(pos + 1);
                 auto &func = linker.cache.functions[payload];
                 log << Logger::Debug << func.symbol->name << '\n';
-                auto &f = std::get<Linker::Symbol::Function>(func.symbol->data);
+                // auto &f = std::get<Linker::Symbol::Function>(func.symbol->data);
                 // TODO: figure out how I intended to figure out when something is in the same module and check
-                // whether it is more efficient to link internal jumps here than to have the linker do it at RT
+                // Am I using jumprel at all? It would definitely remove space usage
+                // whether it is more efficient to link internal jumps here than to have the linker do it at RT. Slighlty higher overhead at start that way, but jumps use less clock cycles
                 if (!~func.permIndex)
                 {
                     func.permIndex = module.requiredSymbols.size();
@@ -84,9 +103,28 @@ namespace vwa
                 pos += bc::getInstructionSize(pos->instruction);
             }
         }
-        // TODO: add struct checking here
+        auto reqs = module.requiredSymbols.size();
+        for (size_t i = 0; i < reqs; i++)
+        {
+            auto &func = std::get<Linker::Symbol::Function>(std::get<vwa::Linker::Symbol>(module.requiredSymbols[i]).data);
+            recurseStruct(module, linker, log, linker.cache.typeFromId(func.returnType.name));
+            for (auto &p : func.params)
+                recurseStruct(module, linker, log, linker.cache.typeFromId(p.type.name));
+        }
+        auto exps = module.exports.size();
+        for (size_t i = 0; i < exps; i++)
+        {
+            if (std::holds_alternative<Linker::Symbol::Function>(module.exports[i].data))
+            {
+                auto &func = std::get<Linker::Symbol::Function>(module.exports[i].data);
+                recurseStruct(module, linker, log, linker.cache.typeFromId(func.returnType.name));
+                for (auto &p : func.params)
+                    recurseStruct(module, linker, log, linker.cache.typeFromId(p.type.name));
+            }
+            else
+                recurseStruct(module, linker, log, linker.cache.typeFromId(module.exports[i].name));
+        }
         log << Logger::Info << "stage 1 done\n";
-        // TODO: somehow iterate over all bytecode, patching adresses where possible and assigning indices where not. I need to keep track of duplicates somehow(only at to list at end), while simultaniously making sure indices remain permanent
     }
 
     void compileMod(Linker::Module &module, Linker &linker, Logger &log)
