@@ -55,7 +55,7 @@ namespace vwa
         auto &s = linker.cache.structs[Linker::Cache::indexMask & struc - Linker::Cache::reservedIndicies];
         if (!~s.permIndex)
         {
-            //This will add some redundant calls, but reduce runtime bloat
+            // This will add some redundant calls, but reduce runtime bloat
             if (s.symbol->name.module.size() && s.symbol->name.module != module.name)
             {
                 s.permIndex = module.requiredSymbols.size();
@@ -153,8 +153,10 @@ namespace vwa
                 sym.name.module = mod.name;
             modules.push_back(linker.provideModule(std::move(mod)));
         }
+        for (auto &mod : modules)
+            for (auto &import : mod->imports)
+                linker.getModule(import);
         log << Logger::Debug << "Locating imports\n";
-        linker.satisfyDependencies(); // There is no point in having this here, is there?
         // It would make more sense to load the symbols, as we encounter them so that compilation can finish even without loading all dependencies
         linker.cache.generate(linker);
         for (size_t i = 0; i < modules.size(); i++)

@@ -77,23 +77,23 @@ int main(int argc, char **argv)
         for (auto &t : tokens)
             trees.push_back(buildTree(t));
         Linker linker;
-        auto handle = dlopen("modules/std/bin/std.native", RTLD_LAZY);
-        if (!handle)
-        {
-            log << Logger::Error << "Failed to load std.native";
-            log << dlerror();
-            return 1;
-        }
-        auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "MODULE_LOAD"));
-        if (!loadFcn)
-        {
-            log << Logger::Error << "Failed to load module loader";
-            log << dlerror();
-            return 1;
-        }
-        auto module = loadFcn();
-        module.data.emplace<Linker::Module::DlHandle>(handle);
-        linker.provideModule(std::move(module));
+        // auto handle = dlopen("modules/std/bin/std.native", RTLD_LAZY);
+        // if (!handle)
+        // {
+        //     log << Logger::Error << "Failed to load std.native";
+        //     log << dlerror();
+        //     return 1;
+        // }
+        // auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "MODULE_LOAD"));
+        // if (!loadFcn)
+        // {
+        //     log << Logger::Error << "Failed to load module loader";
+        //     log << dlerror();
+        //     return 1;
+        // }
+        // auto module = loadFcn();
+        // module.data.emplace<Linker::Module::DlHandle>(handle);
+        // linker.provideModule(std::move(module));
         for (size_t i = 0; i < fileNames.size(); ++i)
             trees[i].name = fileNames[i]; // TODO: make sure all identifiers used internally are updated
         // For some reason initializer lists don't work with move only types
@@ -101,10 +101,10 @@ int main(int argc, char **argv)
         auto compiled = compile(std::move(trees), linker, log);
         // std::ofstream("") linker.serialize(*compiled[0]);
         Linker l2;
-        dlopen("modules/std/bin/std.native", RTLD_LAZY);
-        auto m = loadFcn();
-        m.data.emplace<Linker::Module::DlHandle>(handle);
-        l2.provideModule(std::move(m));
+        // dlopen("modules/std/bin/std.native", RTLD_LAZY);
+        // auto m = loadFcn();
+        // m.data.emplace<Linker::Module::DlHandle>(handle);
+        // l2.provideModule(std::move(m));
         // for (auto c : compiled)
 
         {

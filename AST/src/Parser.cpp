@@ -58,6 +58,13 @@ namespace vwa
             case Token::Type::struct_:
                 mod.exports.emplace_back(parseStruct(tokens, i));
                 break;
+            case Token::Type::import_:
+            {
+                if (tokens.at(++i).type != Token::Type::id)
+                    throw std::runtime_error("Expected id after import");
+                mod.imports.emplace_back(std::get<std::string>(tokens[i++].value));
+                break;
+            }
 
             // case Token::Type::import_:
             // {
@@ -495,7 +502,7 @@ namespace vwa
         case Token::Type::lbracket:
         {
             auto inner = parseExpression(tokens, ++pos);
-            if(tokens[pos++].type!=Token::Type::rbracket)
+            if (tokens[pos++].type != Token::Type::rbracket)
                 throw std::runtime_error("Expected ]");
             return {
                 Node::Type::Dereference, {}, {{Node::Type::Plus, {}, {std::move(what), inner}, tokens[pos].line}}, tokens[pos].line};

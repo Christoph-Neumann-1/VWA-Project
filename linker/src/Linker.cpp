@@ -24,7 +24,8 @@ namespace vwa
         ids.insert({{"string"}, I64 | (1ul << 32)});
         ids.insert({{"function"}, FPtr});
 
-        for (auto &[_, sym] : linker.symbols)
+        const auto processSym = [&](Symbol *sym)
+        {
             if (std::holds_alternative<Symbol::Function>(sym->data))
             {
                 functions.push_back({sym});
@@ -37,6 +38,29 @@ namespace vwa
                 if (auto res = ids.insert({sym->name, structs.size() - 1 + reservedIndicies}).second; !res)
                     throw std::runtime_error("Duplicate struct name");
             }
+        };
+
+        for (auto &[_, sym] : linker.symbols)
+            processSym(sym);
+
+        // const auto requireSymbol = [&](Identifier sym) -> void
+        // {
+        //     if (ids.contains(sym))
+        //         return;
+        //     decltype(auto) symbol = linker.getSymbol(sym);
+        //     processSym(&symbol);
+        // };
+
+        const auto requireType = [&](Identifier type) -> CachedType
+        {
+            // requireSymbol(type);
+            decltype(auto) t = typeFromId(type);
+            if (~t && !(t & typeMask))
+                return t;
+            if (t & typeMask)
+                throw std::runtime_error("Not a type");
+        };
+        
         const auto initStruct = [&](CachedStruct &s, auto &self)
         {
             if (s.state == s.Done)
@@ -49,11 +73,7 @@ namespace vwa
             s.members.reserve(sym.fields.size());
             for (auto &mem : sym.fields)
             {
-                auto memT = typeFromId(mem.type.name);
-                if (!~memT)
-                    throw std::runtime_error("Unknown type: " + mem.type.name.name);
-                if (memT & Cache::typeMask)
-                    throw std::runtime_error("Function is not a type");
+                auto memT = requireType(mem.type.name);
                 CachedStruct::Member m{.type = memT | ((uint64_t{mem.type.pointerDepth} << 32) & pointerDepthMask), .offset = s.size};
                 if (memT >= reservedIndicies && !mem.type.pointerDepth)
                     self(structs[memT - reservedIndicies], self);
@@ -62,27 +82,18 @@ namespace vwa
             }
             s.state = s.Done;
         };
-        for (auto &s : structs)
-            initStruct(s, initStruct);
+        for (size_t i{}; i < structs.size();i++)
+            initStruct(structs[i], initStruct);
         for (auto &f : functions)
         {
             auto &func = std::get<Linker::Symbol::Function>(f.symbol->data);
-            auto retT = typeFromId(func.returnType.name);
-            // TODO: seperate validate function which throws
-            if (!~retT)
-                throw std::runtime_error("Unknown type: " + func.returnType.name.name);
-            if (retT & Cache::typeMask)
-                throw std::runtime_error("Function is not a type");
+            auto retT = requireType(func.returnType.name);
             retT |= (uint64_t{func.returnType.pointerDepth} << 32) & pointerDepthMask;
             f.returnType = retT;
             f.params.reserve(func.params.size());
             for (auto &param : func.params)
             {
-                auto paramT = typeFromId(param.type.name);
-                if (!~paramT)
-                    throw std::runtime_error("Unknown type: " + param.type.name.name);
-                if (paramT & Cache::typeMask)
-                    throw std::runtime_error("Function is not a type");
+                auto paramT = requireType(param.type.name);
                 // TODO: fix for other parts of the program(pointerdepth overriden)
                 auto ptrDepth = param.type.pointerDepth + ((paramT & pointerDepthMask) >> 32);
                 paramT &= ~pointerDepthMask;
@@ -178,19 +189,38 @@ namespace vwa
     {
         // throw std::runtime_error(__func__);
         // FIXME I should really cache this
-        for (auto &file : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
-        {
-            if (file.is_regular_file() && file.path().filename() == name + ".bc")
+        //FIXME: allow loading uncompiled stuff
+        for (auto &dir : searchPaths)
+            for (auto &file : std::filesystem::recursive_directory_iterator(dir))
             {
-                std::ifstream t(file.path());
-                t.seekg(0, std::ios::end);
-                size_t size = t.tellg();
-                t.seekg(0);
-                std::unique_ptr<char[]> buf(new char[size]);
-                t.read(buf.get(), size);
-                provideModule(deserialize(std::string_view(buf.get(), size)));
+                if (!file.is_regular_file())
+                    continue;
+                if (file.path().filename() == name + ".bc")
+                {
+                    std::ifstream t(file.path());
+                    t.seekg(0, std::ios::end);
+                    size_t size = t.tellg();
+                    t.seekg(0);
+                    std::unique_ptr<char[]> buf(new char[size]);
+                    t.read(buf.get(), size);
+                    provideModule(deserialize(std::string_view(buf.get(), size)));
+                    return;
+                }
+                if (file.path().filename() == name + ".native")
+                {
+                    auto fname = file.path().string();
+                    Module::DlHandle handle{dlopen(fname.c_str(), RTLD_LAZY)};
+                    if (!handle)
+                        continue;
+                    auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "MODULE_LOAD"));
+                    if (!loadFcn)
+                        continue;
+                    auto module = loadFcn();
+                    module.data.emplace<Linker::Module::DlHandle>(std::move(handle));
+                    provideModule(std::move(module));
+                    return;
+                }
             }
-        }
     }
 
     void Linker::Module::satisfyDependencies(Linker &linker)

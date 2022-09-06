@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <memory>
 #include <cstring>
+#include <filesystem>
 
 // TODO: consider memory mapping modules
 
@@ -176,6 +177,9 @@ namespace vwa
                 DlHandle &operator=(DlHandle) = delete;
                 DlHandle(void *d) : data(d) {}
                 ~DlHandle();
+                operator void*() const{
+                    return data;
+                }
 
                 // TODO: move semantics
             };
@@ -192,6 +196,7 @@ namespace vwa
             std::variant<std::monostate, DlHandle, Mapping, std::vector<bc::BcToken>> data;
             size_t offset{~0ul}; // Offset where the actual code starts, before that are the constants
             // TODO: how do I avoid duplicates here?
+            std::vector<std::string> imports; // This is not used at runtime;
             std::vector<std::variant<Symbol, Symbol *>> requiredSymbols;
             std::vector<Symbol> exports; // should I rename this?
 
@@ -477,14 +482,14 @@ namespace vwa
 
         Cache cache;
 
-        void addSearchPath(std::string path)
+        void addSearchPath(std::string_view path)
         {
-            searchPaths.push_back(std::move(path));
+            searchPaths.push_back(path);
         }
 
     private:
         std::unordered_map<std::string, Module> modules;
         std::unordered_map<Identifier, Symbol *> symbols;
-        std::vector<std::string> searchPaths{"."};
+        std::vector<std::filesystem::path> searchPaths{"."};
     };
 };
