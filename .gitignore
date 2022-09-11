@@ -7,3 +7,5 @@ callgrind.out.*
 *.mod
 out.vwa
 testfile2
+.vwa-project
+
