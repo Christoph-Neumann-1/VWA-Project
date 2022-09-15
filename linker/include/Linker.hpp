@@ -177,7 +177,8 @@ namespace vwa
                 DlHandle &operator=(DlHandle) = delete;
                 DlHandle(void *d) : data(d) {}
                 ~DlHandle();
-                operator void*() const{
+                operator void *() const
+                {
                     return data;
                 }
 
@@ -305,9 +306,9 @@ namespace vwa
                 throw SymbolNotFound(symbol.name.name);
         }
 
-        std::string serialize(const Module &);
+        std::string serialize(const Module &,bool);
         static Module deserialize(std::string_view in);
-
+        std::string generateInterface();
         // TODO: try to transfer some of these ideas to the vm
         struct Cache
         {
@@ -485,6 +486,35 @@ namespace vwa
         void addSearchPath(std::string_view path)
         {
             searchPaths.push_back(path);
+        }
+
+        // TODO: use
+        void fillMissingModuleNames(Module &m)
+        {
+            auto patch = [&m, this](Identifier &id)
+            {
+                if (id.module.empty() && symbols.find({id.name, m.name}) != symbols.end())
+                    id.module = m.name;
+            };
+            auto patchSym = [&patch](Symbol &sym)
+            {
+                patch(sym.name);
+                if (std::holds_alternative<Symbol::Struct>(sym.data))
+                    for (auto &f : std::get<Symbol::Struct>(sym.data).fields)
+                        patch(f.type.name);
+                else
+                {
+                    auto &f = std::get<Symbol::Function>(sym.data);
+                    patch(f.returnType.name);
+                    for (auto &p : f.params)
+                        patch(p.type.name);
+                }
+            };
+            for (auto &sym : m.exports)
+                patchSym(sym);
+            for (auto &sym : m.requiredSymbols)
+                if (auto s = std::get_if<Symbol>(&sym))
+                    patchSym(*s);
         }
 
     private:

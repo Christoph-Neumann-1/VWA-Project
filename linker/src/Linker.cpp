@@ -21,8 +21,8 @@ namespace vwa
         ids.insert({{"int"}, I64});
         ids.insert({{"float"}, F64});
         ids.insert({{"char"}, U8});
-        ids.insert({{"string"}, I64 | (1ul << 32)});
-        ids.insert({{"function"}, FPtr});
+        ids.insert({{"string"}, I64 | (1ul << 32)}); // FIXME: this should be replaced by I64 ptr when found, not later
+        ids.insert({{"function"}, FPtr});            // TODO: better way to encode this
 
         const auto processSym = [&](Symbol *sym)
         {
@@ -59,8 +59,11 @@ namespace vwa
                 return t;
             if (t & typeMask)
                 throw std::runtime_error("Not a type");
+            if (!~t)
+                throw std::runtime_error("Invalid type");
+            throw std::runtime_error("just no");
         };
-        
+
         const auto initStruct = [&](CachedStruct &s, auto &self)
         {
             if (s.state == s.Done)
@@ -82,7 +85,7 @@ namespace vwa
             }
             s.state = s.Done;
         };
-        for (size_t i{}; i < structs.size();i++)
+        for (size_t i{}; i < structs.size(); i++)
             initStruct(structs[i], initStruct);
         for (auto &f : functions)
         {
@@ -189,13 +192,14 @@ namespace vwa
     {
         // throw std::runtime_error(__func__);
         // FIXME I should really cache this
-        //FIXME: allow loading uncompiled stuff
+        // FIXME: allow loading uncompiled stuff
+        //FIXME: prefer: native > bc > interface
         for (auto &dir : searchPaths)
             for (auto &file : std::filesystem::recursive_directory_iterator(dir))
             {
                 if (!file.is_regular_file())
                     continue;
-                if (file.path().filename() == name + ".bc")
+                if (file.path().filename() == name + ".bc" || file.path().filename() == name + ".interface")
                 {
                     std::ifstream t(file.path());
                     t.seekg(0, std::ios::end);
@@ -203,7 +207,10 @@ namespace vwa
                     t.seekg(0);
                     std::unique_ptr<char[]> buf(new char[size]);
                     t.read(buf.get(), size);
-                    provideModule(deserialize(std::string_view(buf.get(), size)));
+                    auto &mod = *provideModule(deserialize(std::string_view(buf.get(), size)));
+                    for (auto &n : mod.imports)
+                        getModule(n);
+                    mod.imports.clear();
                     return;
                 }
                 if (file.path().filename() == name + ".native")
@@ -212,7 +219,7 @@ namespace vwa
                     Module::DlHandle handle{dlopen(fname.c_str(), RTLD_LAZY)};
                     if (!handle)
                         continue;
-                    auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "MODULE_LOAD"));
+                    auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "VM_ONLOAD"));
                     if (!loadFcn)
                         continue;
                     auto module = loadFcn();
@@ -242,7 +249,6 @@ namespace vwa
         if (std::holds_alternative<DlHandle>(data))
         {
             return;
-            // TODO: someone should really notify the module of this
         }
 
         auto begin = getData();
@@ -309,9 +315,16 @@ namespace vwa
         // Should satisfyDepependencies by called beforehand?
         for (auto &m : modules)
             m.second.patchAddresses(*this);
+        for (auto &m : modules)
+            if (auto it = std::get_if<Module::DlHandle>(&m.second.data))
+            {
+                auto f = reinterpret_cast<void (*)(Linker &)>(dlsym(*it, "VM_ONLINK"));
+                if (f)
+                    f(*this);
+            }
     }
-
-    std::string Linker::serialize(const Module &mod)
+    // TODO: reuse most of this for the boilerplate generator
+    std::string Linker::serialize(const Module &mod, bool interface)
     {
         // TODO: hashes to go faster
 
@@ -382,7 +395,16 @@ namespace vwa
                 }
             }
         }
-        if (mod.requiredSymbols.size())
+
+        if (interface)
+        {
+            if (mod.imports.size())
+                output << 'M';
+            emplaceLength(output, mod.imports.size());
+            for (auto &i : mod.imports)
+                emplaceString(output, i);
+        }
+        else if (mod.requiredSymbols.size())
         {
             output << 'I';
             emplaceLength(output, mod.requiredSymbols.size()); // To allow preallocation of vector
@@ -413,7 +435,7 @@ namespace vwa
                 }
             }
         }
-        if (mod.getDataSize())
+        if (!interface&&mod.getDataSize())
         {
             output << 'C';
             emplaceLength(output, mod.offset);
@@ -479,7 +501,7 @@ namespace vwa
         pos += sizeof("VWA_MODULE") - 1;
         Module ret;
         ret.name = readStr();
-        bool hadExports{0}, hadImports{0}, hadCode{0};
+        bool hadExports{0}, hadImports{0}, hadCode{0}, hadInterfaceImports{0};
         // Ok, so make this handle unordered sections and maybe no sections at all if some moron compiles an empty module
         for (int i = 0; i < 3; i++)
         {
@@ -534,6 +556,8 @@ namespace vwa
             {
                 if (hadImports)
                     throw std::runtime_error("Duplicate section");
+                if (hadInterfaceImports)
+                    throw std::runtime_error("Cannot have interface imports alongside normal ones");
                 hadImports = 1;
                 auto l = readSize();
                 ret.requiredSymbols.reserve(l);
@@ -578,6 +602,8 @@ namespace vwa
                 if (hadCode)
                     // TODO: implemente memory mapping for code
                     throw std::runtime_error("Duplicate section");
+                if (hadInterfaceImports)
+                    throw std::runtime_error("Cannot have code in interface file");
                 hadCode = 1;
                 ret.offset = readSize();
                 auto data = readStr();
@@ -585,6 +611,21 @@ namespace vwa
                 d.resize(data.size());
                 std::memcpy(d.data(), data.data(), data.size());
                 ret.data = std::move(d);
+                break;
+            }
+            case 'M':
+            {
+                if (hadInterfaceImports)
+                    throw std::runtime_error("Duplicate section");
+                if (hadCode)
+                    throw std::runtime_error("Cannot have code in interface file");
+                if (hadImports)
+                    throw std::runtime_error("Cannot have interface imports alongside normal ones");
+
+                auto l = readSize();
+                ret.imports.reserve(l);
+                while (l--)
+                    ret.imports.emplace_back(readStr());
                 break;
             }
             default:

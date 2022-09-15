@@ -1,0 +1,12 @@
+module core
+
+export:
+String{length:int, content:int*}
+make_str(int*)->String
+print(String)
+print_raw(int*)
+print_c_str(char*)
+getLine()->String
+getLine_raw()->int*
+malloc(int)->void*
+free(void*)
