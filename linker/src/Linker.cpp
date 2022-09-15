@@ -7,6 +7,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <unordered_set>
+#include <array>
 namespace vwa
 {
 
@@ -193,41 +195,86 @@ namespace vwa
         // throw std::runtime_error(__func__);
         // FIXME I should really cache this
         // FIXME: allow loading uncompiled stuff
-        //FIXME: prefer: native > bc > interface
+        // FIXME: prefer: native > bc > interface
+        std::array<std::unordered_set<std::filesystem::path>, 3> candidates;
         for (auto &dir : searchPaths)
             for (auto &file : std::filesystem::recursive_directory_iterator(dir))
-            {
                 if (!file.is_regular_file())
                     continue;
-                if (file.path().filename() == name + ".bc" || file.path().filename() == name + ".interface")
+                else if (file.path().filename() == name + ".interface")
+                    candidates[2].emplace(std::filesystem::absolute(file.path().filename()));
+                else if (file.path().filename() == name + ".bc")
+                    candidates[1].emplace(std::filesystem::absolute(file.path().filename()));
+                else if (file.path().filename() == name + ".native")
+                    candidates[0].emplace(std::filesystem::absolute(file.path().filename()));
+
+        auto resolve = [](const std::unordered_set<std::filesystem::path> &results) -> const std::filesystem::path &
+        {
+            const std::filesystem::path *current{};
+            for (auto &r : results)
+                if (!current || std::filesystem::last_write_time(r) > std::filesystem::last_write_time(*current))
+                    current = &r;
+            return *current;
+        };
+
+        while (1)
+        {
+            auto category = candidates[0].size() ? 0 : candidates[1].size() ? 1
+                                                   : candidates[2].size()   ? 2
+                                                                            : ({ throw std::runtime_error("No candidate file for module " + name);-1; });
+
+            auto file = resolve(candidates[category]);
+
+            switch (category)
+            {
+            case 0:
+            {
+                auto fname = file.string();
+                Module::DlHandle handle{dlopen(fname.c_str(), RTLD_LAZY)};
+                if (!handle)
                 {
-                    std::ifstream t(file.path());
-                    t.seekg(0, std::ios::end);
-                    size_t size = t.tellg();
-                    t.seekg(0);
-                    std::unique_ptr<char[]> buf(new char[size]);
-                    t.read(buf.get(), size);
-                    auto &mod = *provideModule(deserialize(std::string_view(buf.get(), size)));
-                    for (auto &n : mod.imports)
-                        getModule(n);
-                    mod.imports.clear();
-                    return;
+                    candidates[category].erase(file);
+                    continue;
                 }
-                if (file.path().filename() == name + ".native")
+                auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "VM_ONLOAD"));
+                if (!loadFcn)
                 {
-                    auto fname = file.path().string();
-                    Module::DlHandle handle{dlopen(fname.c_str(), RTLD_LAZY)};
-                    if (!handle)
-                        continue;
-                    auto loadFcn = reinterpret_cast<Linker::Module (*)()>(dlsym(handle, "VM_ONLOAD"));
-                    if (!loadFcn)
-                        continue;
-                    auto module = loadFcn();
-                    module.data.emplace<Linker::Module::DlHandle>(std::move(handle));
-                    provideModule(std::move(module));
-                    return;
+                    candidates[category].erase(file);
+                    continue;
                 }
+                auto module = loadFcn();
+                module.data.emplace<Linker::Module::DlHandle>(std::move(handle));
+                provideModule(std::move(module));
+                return;
             }
+            case 1:
+            case 2:
+            {
+                std::ifstream t(file);
+                t.seekg(0, std::ios::end);
+                size_t size = t.tellg();
+                t.seekg(0);
+                std::unique_ptr<char[]> buf(new char[size]);
+                t.read(buf.get(), size);
+                Module *mod;
+                try
+                {
+                    mod = provideModule(deserialize(std::string_view(buf.get(), size)));
+                }
+                catch (std::runtime_error e)
+                {
+                    candidates[category].erase(file);
+                    continue;
+                }
+                for (auto &n : mod->imports)
+                    getModule(n);
+                mod->imports.clear();
+                return;
+            }
+            default:
+                throw std::runtime_error(".");
+            }
+        }
     }
 
     void Linker::Module::satisfyDependencies(Linker &linker)
@@ -435,7 +482,7 @@ namespace vwa
                 }
             }
         }
-        if (!interface&&mod.getDataSize())
+        if (!interface && mod.getDataSize())
         {
             output << 'C';
             emplaceLength(output, mod.offset);

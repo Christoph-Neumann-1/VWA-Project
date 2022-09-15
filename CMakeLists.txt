@@ -23,4 +23,4 @@ add_subdirectory(modules)
 add_subdirectory(test)
 add_subdirectory(BytecodeTools)
 
-add_custom_target(Basic DEPENDS compiler vm std)
+add_custom_target(Basic DEPENDS compiler vm core)
