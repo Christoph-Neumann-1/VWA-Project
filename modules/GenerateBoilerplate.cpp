@@ -477,7 +477,7 @@ namespace vwa::boilerplate
                 size_t counter{};
                 for (auto &field : f.params)
                 {
-                    field.name = "p" + std::to_string(counter);
+                    field.name = "p" + std::to_string(counter++);
                     out << fieldToStr(field) << ';';
                 }
                 for (auto it = f.params.rbegin(); it != f.params.rend(); it++)
@@ -486,7 +486,7 @@ namespace vwa::boilerplate
                     // out << "std::memcpy(&" << it->name << ',' << "vm->stack.top-sizeof(" << typeToStr(it->type) << "),"
                     //     << "sizeof(" << typeToStr(it->type) << "));vm->stack.top-=sizeof(" << typeToStr(it->type) << ");";
                 }
-                bool isVoid = f.returnType.name.name == "void";
+                bool isVoid = f.returnType.name.name == "void"&&!f.returnType.pointerDepth;
                 if (!isVoid)
                     out << "vm->stack.push(";
                 out << "::" << s.name.module << "::" << s.name.name << "(";
@@ -513,9 +513,18 @@ namespace vwa::boilerplate
             << "return module;\n"
             << "}\n"
 
-            << "void InternalLink(::vwa::Linker&){\n"
-            << "//TODO: fill in the unlinked requirements here\n"
-            << "}\n"
+            << "void InternalLink(::vwa::Linker& linker){\n";
+        for (auto &i : mod.requiredSymbols)
+        {
+            auto s = std::get<0>(i);
+            if (std::holds_alternative<Linker::Symbol::Function>(s.data))
+            {
+                out << "*reinterpret_cast<void**>(&::" << s.name.module << "::" << s.name.name
+                    << ")=std::get<::vwa::Linker::Symbol::Function>(linker.getSymbol({\""
+                    << s.name.name << "\",\"" << s.name.module << "\"}).data).ffi_direct;\n";
+            }
+        }
+        out << "}\n"
 
             << "void InternalExit(){}\n"
             << "#ifndef MODULE_COSTUM_ENTRY_POINT\n"
@@ -533,10 +542,10 @@ namespace vwa::boilerplate
 
 int main(int argc, char **argv)
 {
-    bool interfaceOnly=argc==3&&!strcmp(argv[1],"-i");
-    if (argc != 2+interfaceOnly)
+    bool interfaceOnly = argc == 3 && !strcmp(argv[1], "-i");
+    if (argc != 2 + interfaceOnly)
         throw std::runtime_error("expected exactly one argument");
-    std::ifstream input{argv[1+interfaceOnly]};
+    std::ifstream input{argv[1 + interfaceOnly]};
     if (!input.is_open())
         throw std::runtime_error("failed to open file");
     vwa::Linker linker;
