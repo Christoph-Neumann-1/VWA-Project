@@ -68,5 +68,6 @@ namespace vwa::bc
         "EqualI",
         "NotEqualI",
     };
+    static_assert(instrStrMap.size() == bc::LastInstr);
     extern std::unordered_map<std::string, BcInstruction> strInstrMap;
 }
