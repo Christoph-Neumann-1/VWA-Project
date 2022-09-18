@@ -1,0 +1,25 @@
+module data
+
+import:
+core::String
+core::malloc
+core::free
+core::realloc
+core::calloc
+
+export:
+Vector{start:void*,end:void*,used:void*,tSize:int}
+vecInit(int)->Vector
+vecResize(Vector*,int)->int
+vecReserve(Vector*,int)->int
+vecPush(Vector*,void*)->int
+vecSize(Vector)->int
+vecCapacity(Vector)->int
+vecAt(Vector,int)->void*
+vecDel(Vector*)
+vecShrink(Vector*)
+
+Array{start:void*,size:int,tSize:int}
+arrAt(Array,int)->void*
+arrInit(int,int)->Array
+arrDel(Array*)
