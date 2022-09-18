@@ -169,7 +169,8 @@ namespace vwa
     {
         VarType result;
         auto &name = std::get<std::string>(tokens[pos++].value);
-        if (tokens[pos].type == Token::Type::colon)
+        //TODO: wouldn't a single colon work too?
+        if (tokens[pos].type == Token::Type::double_colon)
         {
             result.name.module = name;
             result.name.name = std::get<std::string>(tokens[++pos].value);
