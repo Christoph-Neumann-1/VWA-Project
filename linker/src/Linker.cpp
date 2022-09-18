@@ -202,11 +202,11 @@ namespace vwa
                 if (!file.is_regular_file())
                     continue;
                 else if (file.path().filename() == name + ".interface")
-                    candidates[2].emplace(std::filesystem::absolute(file.path().filename()));
+                    candidates[2].emplace(std::filesystem::absolute(file.path()));
                 else if (file.path().filename() == name + ".bc")
-                    candidates[1].emplace(std::filesystem::absolute(file.path().filename()));
+                    candidates[1].emplace(std::filesystem::absolute(file.path()));
                 else if (file.path().filename() == name + ".native")
-                    candidates[0].emplace(std::filesystem::absolute(file.path().filename()));
+                    candidates[0].emplace(std::filesystem::absolute(file.path()));
 
         auto resolve = [](const std::unordered_set<std::filesystem::path> &results) -> const std::filesystem::path &
         {
@@ -233,6 +233,7 @@ namespace vwa
                 Module::DlHandle handle{dlopen(fname.c_str(), RTLD_LAZY)};
                 if (!handle)
                 {
+                    puts(dlerror());
                     candidates[category].erase(file);
                     continue;
                 }
