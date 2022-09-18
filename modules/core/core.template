@@ -10,3 +10,7 @@ getLine()->String
 getLine_raw()->int*
 malloc(int)->void*
 free(void*)
+realloc(void*,int)->void*
+memcpy(void*,void*,int)->void*
+memmove(void*,void*,int)->void*
+calloc(int,int)->void*
