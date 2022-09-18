@@ -103,7 +103,7 @@ namespace vwa
 
     void discard(const CachedType result, std::vector<bc::BcToken> &bc, const Cache &cache)
     {
-        auto size = cache.getSizeOfType(result);
+        uint64_t size = cache.getSizeOfType(result);
         if (!size)
             return;
         bc.push_back({bc::Pop});
