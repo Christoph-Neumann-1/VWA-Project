@@ -1,7 +1,0 @@
-module m
-
-import:
-
-export:
-String{length: int, content: int*}
-strLen(String)->int
