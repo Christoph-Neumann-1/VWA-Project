@@ -113,13 +113,12 @@ int main(int argc, char **argv)
             std::ifstream stream{file};
             processed.push_back(preprocessor.process(stream));
         }
-        // if (PreprocessorOnly || true)
-        // {
-        //     log << Logger::Info << "Preprocessing completed, exiting\n";
-        //     std::ofstream out("out.vwa");
-        //     out << processed.toString();
-        //     // return 0;
-        // }
+        if (PreprocessorOnly || true)
+        {
+            for (size_t i = 0; i < fileNames.size();i++)
+                std::ofstream(fileNames[i].append(".pp")) << processed[i].toString();
+            return 0;
+        }
         std::vector<std::vector<Token>> tokens;
         tokens.reserve(fileNames.size());
         for (size_t i = 0; i < processed.size(); i++)
