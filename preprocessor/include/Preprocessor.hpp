@@ -151,6 +151,8 @@ namespace vwa
                         --it;
                         pos = it->str.size() - 1;
                     }
+                    else
+                        pos--;
                     return *this;
                 }
                 charIterator operator--(int)
