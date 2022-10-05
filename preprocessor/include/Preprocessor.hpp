@@ -9,15 +9,6 @@ namespace vwa
     class Preprocessor
     {
     public:
-        struct Options
-        {
-            std::vector<std::filesystem::path> searchPath;
-            std::vector<std::pair<std::string, std::string>> defines; // TODO upate for use with file
-            uint64_t maxExpansionDepth = 100;
-        };
-        Preprocessor(Options options_) : options(options_) {}
-
-        // TODO: decide how to handle file names/line numbers for inserted macros. Oh and implement file names in the first place
         struct File
         {
             struct Node
@@ -253,6 +244,15 @@ namespace vwa
                 other.m_end = nullptr;
                 return *this;
             }
+            File(const File &other)
+            {
+                auto pos = other.head.get();
+                while (pos)
+                {
+                    append(pos);
+                    pos = pos->next.get();
+                }
+            }
             File() {}
 
             iterator begin() { return iterator(head.get()); }
@@ -329,6 +329,15 @@ namespace vwa
                 return begin;
             }
         };
+        struct Options
+        {
+            std::vector<std::filesystem::path> searchPath;
+            std::vector<std::pair<std::string, File>> defines; // TODO upate for use with file
+            uint64_t maxExpansionDepth = 100;
+        };
+        Preprocessor(Options options_) : options(options_) {}
+
+        // TODO: decide how to handle file names/line numbers for inserted macros. Oh and implement file names in the first place
         File process(std::istream &input);
 
     private:
