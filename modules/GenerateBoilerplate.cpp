@@ -550,7 +550,7 @@ int main(int argc, char **argv)
         throw std::runtime_error("failed to open file");
     vwa::Linker linker;
 
-    std::ofstream output{std::filesystem::path{argv[1]}.replace_extension(".hpp")};
+    std::ofstream output{std::filesystem::path{argv[1]}.replace_extension(".gen.hpp")};
     auto result = vwa::boilerplate::generateBoilerplate(input, linker, interfaceOnly);
     if (!interfaceOnly)
         output << result.first;
