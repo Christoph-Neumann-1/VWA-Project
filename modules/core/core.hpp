@@ -27,6 +27,10 @@ void print_c_str(::vwa::vm_char*);
 ::vwa::vm_int* getLine_raw();
 void* malloc(::vwa::vm_int);
 void free(void*);
+void* realloc(void*,::vwa::vm_int);
+void* memcpy(void*,void*,::vwa::vm_int);
+void* memmove(void*,void*,::vwa::vm_int);
+void* calloc(::vwa::vm_int,::vwa::vm_int);
 }
 #ifdef MODULE_IMPL
 ::vwa::Linker::Module InternalLoad(){
@@ -45,6 +49,10 @@ void free(void*);
 ::vwa::Linker::Symbol{{"getLine_raw","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={},.returnType={{"int",""},1},.ffi=[](::vwa::VM *vm){vm->stack.push(::core::getLine_raw());},.ffi_direct=reinterpret_cast<void*>(::core::getLine_raw)}},
 ::vwa::Linker::Symbol{{"malloc","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"int",""},0}},},.returnType={{"void",""},1},.ffi=[](::vwa::VM *vm){::vwa::vm_int p0;p0=vm->stack.pop<::vwa::vm_int>();::core::malloc(p0);},.ffi_direct=reinterpret_cast<void*>(::core::malloc)}},
 ::vwa::Linker::Symbol{{"free","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"void",""},1}},},.returnType={{"void",""},0},.ffi=[](::vwa::VM *vm){void* p0;p0=vm->stack.pop<void*>();::core::free(p0);},.ffi_direct=reinterpret_cast<void*>(::core::free)}},
+::vwa::Linker::Symbol{{"realloc","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"void",""},1}},{.type={{"int",""},0}},},.returnType={{"void",""},1},.ffi=[](::vwa::VM *vm){void* p0;::vwa::vm_int p1;p1=vm->stack.pop<::vwa::vm_int>();p0=vm->stack.pop<void*>();::core::realloc(p0,p1);},.ffi_direct=reinterpret_cast<void*>(::core::realloc)}},
+::vwa::Linker::Symbol{{"memcpy","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"void",""},1}},{.type={{"void",""},1}},{.type={{"int",""},0}},},.returnType={{"void",""},1},.ffi=[](::vwa::VM *vm){void* p0;void* p1;::vwa::vm_int p2;p2=vm->stack.pop<::vwa::vm_int>();p1=vm->stack.pop<void*>();p0=vm->stack.pop<void*>();::core::memcpy(p0,p1,p2);},.ffi_direct=reinterpret_cast<void*>(::core::memcpy)}},
+::vwa::Linker::Symbol{{"memmove","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"void",""},1}},{.type={{"void",""},1}},{.type={{"int",""},0}},},.returnType={{"void",""},1},.ffi=[](::vwa::VM *vm){void* p0;void* p1;::vwa::vm_int p2;p2=vm->stack.pop<::vwa::vm_int>();p1=vm->stack.pop<void*>();p0=vm->stack.pop<void*>();::core::memmove(p0,p1,p2);},.ffi_direct=reinterpret_cast<void*>(::core::memmove)}},
+::vwa::Linker::Symbol{{"calloc","core"},::vwa::Linker::Symbol::Function{.type=::vwa::Linker::Symbol::Function::External,.params={{.type={{"int",""},0}},{.type={{"int",""},0}},},.returnType={{"void",""},1},.ffi=[](::vwa::VM *vm){::vwa::vm_int p0;::vwa::vm_int p1;p1=vm->stack.pop<::vwa::vm_int>();p0=vm->stack.pop<::vwa::vm_int>();::core::calloc(p0,p1);},.ffi_direct=reinterpret_cast<void*>(::core::calloc)}},
 }};
 return module;
 }
