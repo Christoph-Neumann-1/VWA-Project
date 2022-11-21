@@ -167,13 +167,13 @@ namespace vwa::boilerplate
                     break;
                 if (!(pos + 2 < tokensSize && tokens[pos + 1].type == vwa::boilerplate::Token::namespace_operator && (tokens[pos + 2].type == vwa::boilerplate::Token::id || tokens[pos + 2].type == vwa::boilerplate::Token::asterix)))
                     throw std::runtime_error("Expected '::'");
-                if (tokens[pos + 2].type == vwa::boilerplate::Token::asterix)
+                if (!interfaceOnly&&tokens[pos + 2].type == vwa::boilerplate::Token::asterix)
                 {
                     auto &mod = linker.getModule(str);
                     for (auto &sym : mod.exports)
                         module.requiredSymbols.emplace_back(sym);
                 }
-                else
+                else if(!interfaceOnly)
                     module.requiredSymbols.emplace_back(linker.getSymbol({tokens[pos + 2].value, str}));
                 pos += 3;
             }
@@ -550,11 +550,11 @@ int main(int argc, char **argv)
         throw std::runtime_error("failed to open file");
     vwa::Linker linker;
 
-    std::ofstream output{std::filesystem::path{argv[1]}.replace_extension(".hpp")};
+    std::ofstream output{std::filesystem::path{argv[1+interfaceOnly]}.replace_extension(".hpp")};
     auto result = vwa::boilerplate::generateBoilerplate(input, linker, interfaceOnly);
     if (!interfaceOnly)
         output << result.first;
-    std::ofstream{std::filesystem::path{argv[1]}.replace_extension(".interface")} << linker.serialize(result.second, 1);
+    std::ofstream{std::filesystem::path{argv[1+interfaceOnly]}.replace_extension(".interface")} << linker.serialize(result.second, 1);
 
     // TODO This should really also output an interface file right away or at least have a flag to do so. Or I'll need
     // to add something to the linker so it can parse this file format
