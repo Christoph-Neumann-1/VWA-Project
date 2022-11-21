@@ -21,8 +21,38 @@
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [
-                "testfile",
-                "testfile2",
+                "-r",
+                "testfile.bc",
+                // "-i",
+                // "testfile",
+                // "testfile2",
+                // "--stdout"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Launch boilerplate",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                // "-r",
+                // "testfile.bc",
+                // "-i",
+                // "modules/core/core.template",
+                "modules/data/data.template",
+                // "testfile2",
                 // "--stdout"
             ],
             "stopAtEntry": false,
@@ -63,7 +93,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["SampleIn"],
+            "args": ["core/core.template"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/modules",
             "environment": [],

@@ -78,7 +78,9 @@
         "*.inc": "cpp",
         "hash_map": "cpp",
         "valarray": "cpp",
-        "cfenv": "cpp"
+        "cfenv": "cpp",
+        "span": "cpp",
+        "hash_set": "cpp"
     },
     "lldb.displayFormat": "auto",
     "lldb.dereferencePointers": true

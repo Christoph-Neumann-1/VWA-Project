@@ -10,6 +10,15 @@
 #include <VM.hpp>
 #include <chrono>
 #include <dlfcn.h>
+#include <exception>
+
+struct GregError : std::exception
+{
+    const char *what() const noexcept override
+    {
+        return ColorE("Greg is not allowed to use this");
+    }
+};
 
 int main(int argc, char **argv)
 {
@@ -22,16 +31,25 @@ int main(int argc, char **argv)
     bool execute = false;
     bool usestdin = false;
     bool interfaceOnly{false};
+    Logger log;
+    log.setStream(Logger::LogLevel::Error, &std::cerr);
+    for (uint i = 1; i <= loglvl; i++)
+        log.setStream(static_cast<Logger::LogLevel>(i), &std::cout);
+    if (!std::strcmp("greg", getenv("USER")))
+    {
+        log << Logger::Error << ColorE("You know what you did\n");
+        throw GregError();
+    }
 
     // TODO: automatically detect compiled input
 
     // OK,so in order to not process anything after --, I search for it and just not tell cli11 about them
     auto posAfter = std::find_if(argv, argv + argc, [](auto s)
                                  { return !strcmp(s, "--"); });
-    auto argc2= std::distance(argv,posAfter);
+    auto argc2 = std::distance(argv, posAfter);
     CLI::App app{"VWA Programming language"};
     // TODO: if no file is specified, use stdin
-    app.add_option("-f,--file, files", fileNames, "Input files")->check(CLI::ExistingFile);
+    app.add_option("-f,--file, files", fileNames, "Input files")->check(CLI::ExistingFile)->required();
     app.add_option("-l,--log-level", loglvl, "Verbosity of the output (0-3)")->check(CLI::Range(0, 3));
     app.add_flag("-t,--tree", emitTree, "Emit the AST tree");
     app.add_flag("-p,--preprocessor", PreprocessorOnly, "Only preprocess the input file");
@@ -39,10 +57,6 @@ int main(int argc, char **argv)
     app.add_flag("-i,--interfaceOnly", interfaceOnly, "Only generate interface files")->excludes("-p", "-r");
     CLI11_PARSE(app, argc2, argv);
 
-    Logger log;
-    log.setStream(Logger::LogLevel::Error, &std::cerr);
-    for (uint i = 1; i <= loglvl; i++)
-        log.setStream(static_cast<Logger::LogLevel>(i), &std::cout);
     if (execute)
     {
         std::ifstream t(fileNames.at(0));
@@ -71,7 +85,7 @@ int main(int argc, char **argv)
         log << Logger::Info << "Executing main function\n";
         vm.setupStack();
         vm.stack.push<int64_t>(argc - argc2);
-        for (size_t i = argc2; i < argc - argc2;i++)
+        for (size_t i = argc2; i < argc - argc2; i++)
             vm.stack.push(argv[i]);
         log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
         auto begin = std::chrono::high_resolution_clock::now();
@@ -113,13 +127,12 @@ int main(int argc, char **argv)
             std::ifstream stream{file};
             processed.push_back(preprocessor.process(stream));
         }
-        // if (PreprocessorOnly || true)
-        // {
-        //     log << Logger::Info << "Preprocessing completed, exiting\n";
-        //     std::ofstream out("out.vwa");
-        //     out << processed.toString();
-        //     // return 0;
-        // }
+        if (PreprocessorOnly || true)
+        {
+            for (size_t i = 0; i < fileNames.size(); i++)
+                std::ofstream(fileNames[i].append(".pp")) << processed[i].toString();
+            return 0;
+        }
         std::vector<std::vector<Token>> tokens;
         tokens.reserve(fileNames.size());
         for (size_t i = 0; i < processed.size(); i++)

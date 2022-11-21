@@ -8,4 +8,6 @@ callgrind.out.*
 out.vwa
 testfile2
 .vwa-project
-
+*.bc
+*.interface
+*.gen.hpp

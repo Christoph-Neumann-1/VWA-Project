@@ -35,7 +35,7 @@ namespace vwa
     };
     inline std::ostream &operator<<(std::ostream &s, const Identifier &i)
     {
-        s << i.module << std::string(":") << i.name;
+        s << i.module << "::" << i.name;
         return s;
     }
     // TODO: make the linker calculate and store the size of symbols to avoid redundant computation

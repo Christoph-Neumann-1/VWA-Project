@@ -1,5 +1,5 @@
 #define MODULE_IMPL
-#include "core.hpp"
+#include "core.gen.hpp"
 using namespace vwa;
 namespace core
 {

@@ -1,5 +1,5 @@
 #define MODULE_IMPL
-#include "data.hpp"
+#include "data.gen.hpp"
 
 using namespace vwa;
 // TODO: geometric growth

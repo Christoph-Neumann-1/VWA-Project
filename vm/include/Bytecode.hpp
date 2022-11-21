@@ -6,7 +6,7 @@
 // TODO: consider adding noop
 //TODO: switch all relative operations to being relative to the stack top instead of the base ptr, this makes implementing statement
 //expressions possible. this requires reworking the offsetting code since more instructions need to be offset
-
+//TODO: specialized instructions: e.g. increment inplace...
 //TODO: consider using a different encoding for instructions: aka encoding more in fewer bytes, is it really necessary to allow struct members with 64bits of size
 namespace vwa::bc
 {
