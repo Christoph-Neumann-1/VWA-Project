@@ -61,7 +61,7 @@ namespace vwa
                         break;
                     case ' ':
                         // Comments
-                        if (current.pos = 1)
+                        if (current.pos == 1)
                             current = file.erase(current.it);
                         else
                             current.it->str.erase(current.pos - 1), current = current.it + 1;
@@ -95,7 +95,7 @@ namespace vwa
                                 current++;
                                 goto invoke;
                             case ' ':
-                                throw "I haven't implemented this";
+                                throw std::runtime_error("NOT IMPLEMENTED. WELL, THAT SUCKS GUESS YOU ARE GOING TO HAVE TO MAKE DO WITHOUT IT.");
                             }
                         }
 

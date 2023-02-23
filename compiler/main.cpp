@@ -127,7 +127,7 @@ int main(int argc, char **argv)
             std::ifstream stream{file};
             processed.push_back(preprocessor.process(stream));
         }
-        if (PreprocessorOnly )
+        if (PreprocessorOnly)
         {
             for (size_t i = 0; i < fileNames.size(); i++)
                 std::ofstream(fileNames[i].append(".pp")) << processed[i].toString();
