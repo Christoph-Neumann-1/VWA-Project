@@ -85,7 +85,7 @@ int main(int argc, char **argv)
         log << Logger::Info << "Executing main function\n";
         vm.setupStack();
         vm.stack.push<int64_t>(argc - argc2);
-        for (size_t i = argc2; i < argc - argc2; i++)
+        for (int i = argc2; i < argc - argc2; i++)
             vm.stack.push(argv[i]);
         log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
         auto begin = std::chrono::high_resolution_clock::now();
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
             std::ifstream stream{file};
             processed.push_back(preprocessor.process(stream));
         }
-        if (PreprocessorOnly || true)
+        if (PreprocessorOnly )
         {
             for (size_t i = 0; i < fileNames.size(); i++)
                 std::ofstream(fileNames[i].append(".pp")) << processed[i].toString();
@@ -170,10 +170,10 @@ int main(int argc, char **argv)
             trees[i].name = fileNames[i]; // TODO: make sure all identifiers used internally are updated
         // For some reason initializer lists don't work with move only types
         // I hope I am allowed to move out of the temporary
-        if (interfaceOnly)
+        if (interfaceOnly)//TODO: actually implement
         {
             for (auto &m : trees)
-                std::ofstream(m.name + ".interface");
+                std::ofstream(m.name + ".interface")<<linker.serialize(m,1);
             return 0;
         }
 

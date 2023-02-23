@@ -444,10 +444,9 @@ namespace vwa
             }
         }
 
-        if (interface)
+        if (interface && mod.imports.size())
         {
-            if (mod.imports.size())
-                output << 'M';
+            output << 'M';
             emplaceLength(output, mod.imports.size());
             for (auto &i : mod.imports)
                 emplaceString(output, i);

@@ -11,3 +11,6 @@ testfile2
 *.bc
 *.interface
 *.gen.hpp
+.cache
+.vim
+.nvimrc

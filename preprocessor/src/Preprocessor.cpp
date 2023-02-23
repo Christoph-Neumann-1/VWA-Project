@@ -95,7 +95,7 @@ namespace vwa
                                 current++;
                                 goto invoke;
                             case ' ':
-
+                                throw "I haven't implemented this";
                             }
                         }
 

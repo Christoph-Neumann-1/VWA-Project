@@ -11,7 +11,7 @@
 #include <fstream>
 #include <Linker.hpp>
 #include <unordered_set>
-
+// TODO: make this work with bc functions
 namespace vwa::boilerplate
 {
     using std::string;
@@ -486,7 +486,7 @@ namespace vwa::boilerplate
                     // out << "std::memcpy(&" << it->name << ',' << "vm->stack.top-sizeof(" << typeToStr(it->type) << "),"
                     //     << "sizeof(" << typeToStr(it->type) << "));vm->stack.top-=sizeof(" << typeToStr(it->type) << ");";
                 }
-                bool isVoid = f.returnType.name.name == "void"&&!f.returnType.pointerDepth;
+                bool isVoid = f.returnType.name.name == "void" && !f.returnType.pointerDepth;
                 if (!isVoid)
                     out << "vm->stack.push(";
                 out << "::" << s.name.module << "::" << s.name.name << "(";
@@ -519,9 +519,23 @@ namespace vwa::boilerplate
             auto s = std::get<0>(i);
             if (std::holds_alternative<Linker::Symbol::Function>(s.data))
             {
-                out << "*reinterpret_cast<void**>(&::" << s.name.module << "::" << s.name.name
-                    << ")=std::get<::vwa::Linker::Symbol::Function>(linker.getSymbol({\""
-                    << s.name.name << "\",\"" << s.name.module << "\"}).data).ffi_direct;\n";
+                out << "{\n"
+                    << "auto &tmp=std::get<::vwa::Linker::Symbol::Function>(linker.getSymbol({\""
+                    << s.name.name << "\",\"" << s.name.module << "\"}).data);\n"
+                    << "switch(tmp.type){\n"
+                    << "case ::vwa::Linker::Symbol::Function::External:\n"
+                    << "*reinterpret_cast<void**>(&::" << s.name.module << "::" << s.name.name
+                    << ")=tmp.ffi_direct;\n"
+                    << "break;\n"
+                    << "case ::vwa::Linker::Symbol::Function::Internal:\n"
+                    << "throw \"not implemented because I'd need a reference to the vm somewhere. Fix later\";\n"
+                    << "default:\n"
+                    << "throw \"try initializing first\";\n"
+                    << "}\n"
+                    << "}\n";
+                // << "*reinterpret_cast<void**>(&::" << s.name.module << "::" << s.name.name
+                // << ")=std::get<::vwa::Linker::Symbol::Function>(linker.getSymbol({\""
+                // << s.name.name << "\",\"" << s.name.module << "\"}).data).ffi_direct;}\n";
             }
         }
         out << "}\n"

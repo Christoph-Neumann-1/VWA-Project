@@ -36,7 +36,7 @@ namespace vwa
                 break;
             }
         }
-        // Error in calling code, this should never happen
+        // Error in calling code, this should never happen UNLESS I wanna allow .5
         if (firstNonDigit == begin)
             return std::nullopt;
         // This too, should not occur

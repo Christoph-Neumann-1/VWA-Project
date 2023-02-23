@@ -169,7 +169,7 @@ namespace vwa
     {
         VarType result;
         auto &name = std::get<std::string>(tokens[pos++].value);
-        //TODO: wouldn't a single colon work too?
+        // TODO: wouldn't a single colon work too?
         if (tokens[pos].type == Token::Type::double_colon)
         {
             result.name.module = name;
@@ -192,6 +192,9 @@ namespace vwa
     {
         switch (tokens[pos].type)
         {
+        case Token::Type::semicolon:
+            ++pos;
+            return {Node::Type::Block};
         case Token::Type::lbrace:
             return parseBlock(tokens, pos);
         case Token::Type::let:
@@ -557,9 +560,12 @@ namespace vwa
             {
                 throw std::runtime_error("Expected ')'");
             }
+            //???????
             return parseId(std::move(result), tokens, pos);
         }
         // Now that I think of it, does this need to be all the way down here?
+        // Unless... what if I made it to allow any expression as a parameter?
+        // Need to be careful with array access though
         case Token::Type::size_of:
         {
             auto type = parseType(tokens, ++pos);
