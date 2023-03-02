@@ -314,13 +314,13 @@ namespace vwa::boilerplate
 
         const auto typeMap = [&mod, &requireSym](const Identifier &name) -> std::string
         {
-            static std::unordered_map<std::string, std::string> builtIns{
-                {"int", "::vwa::vm_int"},
-                {"float", "::vwa::vm_float"},
-                {"string", "::vwa::vm_str"},
-                {"char", "::vwa::vm_char"},
-                {"void", "void"},
-            };
+            // static std::unordered_map<std::string, std::string> builtIns{
+            //     {"int", "::vwa::vm_int"},
+            //     {"float", "::vwa::vm_float"},
+            //     {"string", "::vwa::vm_str"},
+            //     {"char", "::vwa::vm_char"},
+            //     {"void", "void"},
+            // };
             if (auto it = builtIns.find(name.name); it != builtIns.end())
                 return it->second;
             if (name.module == mod.name || !name.module.length())

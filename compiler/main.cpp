@@ -70,10 +70,10 @@ int main(int argc, char **argv)
         VM vm;
         log << Logger::Info << "Executing main function\n";
         vm.setupStack();
-        vm.stack.push<int64_t>(argc - argc2);
-        vm.stack.push<uint64_t>(reinterpret_cast<uint64_t>(vm.stack.top)+8);
-        for (int i = argc2+1; i < argc; i++)
-            vm.stack.push(argv[i]);
+        vm.stack.push<int64_t>(std::clamp(long{argc - argc2 - 1}, long{}, std::numeric_limits<int64_t>::max()));
+        vm.stack.push<uint64_t>(reinterpret_cast<uint64_t>(argv + argc2 + 1));
+        // for (int i = argc2+1; i < argc; i++)
+        //     vm.stack.push(argv[i]);
         log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
         auto begin = std::chrono::high_resolution_clock::now();
         auto res = vm.exec(main);
@@ -154,13 +154,16 @@ int main(int argc, char **argv)
         // module.data.emplace<Linker::Module::DlHandle>(handle);
         // linker.provideModule(std::move(module));
         for (size_t i = 0; i < fileNames.size(); ++i)
-            trees[i].name = fileNames[i]; // TODO: make sure all identifiers used internally are updated
+        {
+            trees[i].name = std::filesystem::path(fileNames[i]).filename().replace_extension(""); // TODO: make sure all identifiers used internally are updated
+            trees[i].fname = fileNames[i];
+        }
         // For some reason initializer lists don't work with move only types
         // I hope I am allowed to move out of the temporary
-        if (interfaceOnly)//TODO: actually implement
+        if (interfaceOnly) // TODO: actually implement
         {
             for (auto &m : trees)
-                std::ofstream(m.name + ".interface")<<linker.serialize(m,1);
+                std::ofstream(m.name + ".interface") << linker.serialize(m, 1);
             return 0;
         }
 
@@ -179,7 +182,7 @@ int main(int argc, char **argv)
             // // log << Logger::Debug << "Trying to find issue with requiredsymbols\n";
             // // for (size_t i = 0;i<m.requiredSymbols.size();i++)
             // //     log<<"Symbol: "<<i<< (m.requiredSymbols[i]==c->requiredSymbols[i]?" matches":" doesn't match")<<'\n';
-            std::ofstream(c->name + ".bc") << linker.serialize(*c, 0);
+            std::ofstream(c->fname + ".bc") << linker.serialize(*c, 0);
         }
         // l2.satisfyDependencies();
         // l2.patchAddresses();

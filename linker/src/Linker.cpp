@@ -24,7 +24,7 @@ namespace vwa
         ids.insert({{"float"}, F64});
         ids.insert({{"char"}, U8});
         ids.insert({{"string"}, U8 | (1ul << 32)}); // FIXME: this should be replaced by I64 ptr when found, not later
-        ids.insert({{"function"}, FPtr});            // TODO: better way to encode this
+        ids.insert({{"function"}, FPtr});           // TODO: better way to encode this
 
         const auto processSym = [&](Symbol *sym)
         {
@@ -78,6 +78,8 @@ namespace vwa
             s.members.reserve(sym.fields.size());
             for (auto &mem : sym.fields)
             {
+                if (mem.type.name.module.empty() && builtIns.find(mem.type.name.name) == builtIns.end())
+                    mem.type.name.module = s.symbol->name.module;
                 auto memT = requireType(mem.type.name);
                 CachedStruct::Member m{.type = memT | ((uint64_t{mem.type.pointerDepth} << 32) & pointerDepthMask), .offset = s.size};
                 if (memT >= reservedIndicies && !mem.type.pointerDepth)

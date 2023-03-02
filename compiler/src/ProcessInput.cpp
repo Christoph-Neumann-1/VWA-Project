@@ -9,7 +9,7 @@ namespace vwa
 
     // This function goes through the function body and replaces all symbol names with their index in the cache and checks if they are at least of the correct kind(function or type).
     // This function calls itself recursively
-    void UpdateVarUsage(const Linker::Cache &cache, Node &node, Logger &log)
+    void UpdateVarUsage(const Linker::Cache &cache, Node &node, Logger &log, Linker::Module&mod)
     {
         switch (node.type)
         {
@@ -22,6 +22,8 @@ namespace vwa
                 log << Logger::Error << "Type node with children\n";
                 throw std::runtime_error("Type node should have no children");
             }
+                if (n.name.module.empty() && builtIns.find(n.name.name) == builtIns.end())
+                    n.name.module = mod.name;
             auto t = cache.setPointerDepth(cache.typeFromId(n.name), n.pointerDepth);
             if (!~t)
             {
@@ -39,7 +41,7 @@ namespace vwa
         default:
         {
             for (auto &child : node.children)
-                UpdateVarUsage(cache, child, log);
+                UpdateVarUsage(cache, child, log,mod);
             break;
         }
         }
@@ -133,7 +135,7 @@ namespace vwa
         for (auto &func : module.exports)
         {
             if (auto it = std::get_if<Linker::Symbol::Function>(&func.data))
-                UpdateVarUsage(linker.cache, *static_cast<Node *>(it->node), log);
+                UpdateVarUsage(linker.cache, *static_cast<Node *>(it->node), log,module);
         }
         GenModBc(module, linker, log);
         LinkInternal(module, linker, log);
@@ -151,6 +153,7 @@ namespace vwa
             log << Logger::Debug << "Processing module " << mod.name << "\n";
             for (auto &sym : mod.exports)
                 sym.name.module = mod.name;
+            linker.fillMissingModuleNames(mod);
             modules.push_back(linker.provideModule(std::move(mod)));
         }
         for (auto &mod : modules)

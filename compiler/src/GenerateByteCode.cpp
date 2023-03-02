@@ -413,8 +413,8 @@ namespace vwa
                 else
                     throw std::runtime_error("Cannot add pointers");
             else if (bP)
-            //Idk what I am doing
-                if (aI==Cache::I64)
+                // Idk what I am doing
+                if (aI == Cache::I64)
                 {
                     // TODO this is a horrible solution, I really need to find out if this is a safe thing to do
                     bc.push_back({bc::AddI});
@@ -1078,6 +1078,78 @@ namespace vwa
                 }
             return Cache::I64;
         }
+        case Node::Type::GreaterThan:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto t = promoteType(lhs, rhs, bc, pos, log);
+            if (t & Cache::pointerDepthMask)
+                bc.push_back({bc::LessThanI});
+            else
+                switch (t)
+                {
+                case Cache::I64:
+                    bc.push_back({bc::GreaterThanI});
+                    break;
+                case Cache::F64:
+                    bc.push_back({bc::GreaterThanF});
+                    break;
+                case Cache::U8:
+                    throw std::runtime_error("This should not happen");
+                default:
+                    throw std::runtime_error("Can't compare these types");
+                }
+            return Cache::I64;
+        }
+        case Node::Type::GreaterThanEqual:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto t = promoteType(lhs, rhs, bc, pos, log);
+            if (t & Cache::pointerDepthMask)
+                bc.push_back({bc::LessThanI});
+            else
+                switch (t)
+                {
+                case Cache::I64:
+                    bc.push_back({bc::GreaterThanOrEqualI});
+                    break;
+                case Cache::F64:
+                    bc.push_back({bc::GreaterThanOrEqualF});
+                    break;
+                case Cache::U8:
+                    throw std::runtime_error("This should not happen");
+                default:
+                    throw std::runtime_error("Can't compare these types");
+                }
+            return Cache::I64;
+        }
+        case Node::Type::LessThanEqual:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto t = promoteType(lhs, rhs, bc, pos, log);
+            if (t & Cache::pointerDepthMask)
+                bc.push_back({bc::LessThanI});
+            else
+                switch (t)
+                {
+                case Cache::I64:
+                    bc.push_back({bc::LessThanOrEqualI});
+                    break;
+                case Cache::F64:
+                    bc.push_back({bc::LessThanOrEqualF});
+                    break;
+                case Cache::U8:
+                    throw std::runtime_error("This should not happen");
+                default:
+                    throw std::runtime_error("Can't compare these types");
+                }
+            return Cache::I64;
+        }
         case Node::Type::Cast:
         {
             auto expr = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
@@ -1100,13 +1172,105 @@ namespace vwa
         case Node::Type::LiteralS:
         {
             auto &str = std::get<std::string>(node.value);
-            // pushToConst<int64_t>(constPool, 0);??? What was this trying to achieve
-            
+            pushToConst<char>(constPool, 0);
             for (auto i = str.size() - 1; i + 1 >= 1; --i)
                 pushToConst<char>(constPool, str[i]);
             bc.push_back({bc::AbsOfConst});
             pushToBc<uint64_t>(bc, -bc.size() - constPool.size() + 1);
             return Cache::constructType(Cache::SymbolType::Struct, Cache::U8, 1); // Should this be a char instead?
+        }
+        case Node::Type::And:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            if (auto instr = typeCast(Cache::I64, lhs, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            pos = bc.size();
+            if (auto instr = typeCast(Cache::I64, rhs, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            bc.push_back({bc::And});
+            return {Cache::I64};
+        }
+        case Node::Type::Or:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            if (auto instr = typeCast(Cache::I64, lhs, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            pos = bc.size();
+            if (auto instr = typeCast(Cache::I64, rhs, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            bc.push_back({bc::Or});
+            return {Cache::I64};
+        }
+        case Node::Type::Not:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            if (auto instr = typeCast(Cache::I64, lhs, log); instr)
+                bc.insert(bc.begin() + pos - 1, {*instr});
+            bc.push_back({bc::Not});
+            return {Cache::I64};
+        }
+        case Node::Type::Equal:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto [_a, aP, aI] = Cache::disassemble(lhs);
+            auto [_b, bP, bI] = Cache::disassemble(rhs);
+            CachedType ret;
+            if (aP)
+                lhs = Cache::I64;
+            if (bP)
+                rhs = Cache::I64;
+
+            ret = promoteType(lhs, rhs, bc, pos, log);
+            // I know ret is not a pointer, so I don't need any bitwise logic
+            switch (ret)
+            {
+            case Cache::I64:
+                bc.push_back({bc::EqualI});
+                break;
+            case Cache::F64:
+                bc.push_back({bc::EqualF});
+                break;
+            default:
+                log << Logger::Error << "Cannot compare types\n";
+                throw std::runtime_error("Cannot compare types");
+            }
+            return ret;
+        }
+        case Node::Type::NotEqual:
+        {
+            auto lhs = compileNode(module, linker, node.children[0], fRetT, constPool, bc, scopes, log);
+            auto pos = bc.size();
+            auto rhs = compileNode(module, linker, node.children[1], fRetT, constPool, bc, scopes, log);
+            auto [_a, aP, aI] = Cache::disassemble(lhs);
+            auto [_b, bP, bI] = Cache::disassemble(rhs);
+            CachedType ret;
+            if (aP)
+                lhs = Cache::I64;
+            if (bP)
+                rhs = Cache::I64;
+
+            ret = promoteType(lhs, rhs, bc, pos, log);
+            // I know ret is not a pointer, so I don't need any bitwise logic
+            switch (ret)
+            {
+            case Cache::I64:
+                bc.push_back({bc::NotEqualI});
+                break;
+            case Cache::F64:
+                bc.push_back({bc::NotEqualF});
+                break;
+            default:
+                log << Logger::Error << "Cannot compare types\n";
+                throw std::runtime_error("Cannot compare types");
+            }
+            return ret;
         }
         }
 

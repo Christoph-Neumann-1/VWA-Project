@@ -1,0 +1,17 @@
+struct A{
+    a:int,
+    b:int,
+    c:float,
+}
+
+struct B{
+    a:A,
+    b:int,
+}
+
+func main(argc:int, argv:char**)->int
+{
+    let object:B;
+    object.a.b=5;
+    return object.a.b;
+}

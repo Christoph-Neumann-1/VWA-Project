@@ -18,7 +18,7 @@ namespace core
 
     void print_c_str(char*str)
     {
-        write(0, str, strlen(str));
+        printf("%s", str);
     }
 
     vm_char getChar()

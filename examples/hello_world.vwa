@@ -2,7 +2,7 @@ import core
 
 func main(argc:int, argv:char**) -> int
 {
-    core::print_c_str("Hello, world!");
-    if(argc)
-    core::print_c_str(*argv);
+    core::print_c_str("Hello, world!\n");
+    for(let i:int=0;i<argc;i=i+1;)
+    core::print_c_str(argv[i]);
 }

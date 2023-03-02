@@ -23,6 +23,13 @@
 
 namespace vwa
 {
+    inline std::unordered_map<std::string, std::string> builtIns{
+        {"int", "::vwa::vm_int"},
+        {"float", "::vwa::vm_float"},
+        {"string", "::vwa::vm_str"},
+        {"char", "::vwa::vm_char"},
+        {"void", "void"},
+    };
     struct Identifier
     {
         std::string name;
@@ -161,6 +168,7 @@ namespace vwa
         struct Module
         {
             std::string name;
+            std::string fname;
             struct DlHandle
             {
                 void *data;
