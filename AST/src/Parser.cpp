@@ -8,7 +8,6 @@ namespace vwa
     using Module = Linker::Module;
     using Function = Symbol::Function;
     using Struct = Linker::Symbol::Struct;
-    using VarType = Linker::VarType;
     using Field = Linker::Symbol::Field;
     // TODO: allow statements where expressions are expected
     /*

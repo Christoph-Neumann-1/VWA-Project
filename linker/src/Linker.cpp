@@ -262,7 +262,7 @@ namespace vwa
                 {
                     mod = provideModule(deserialize(std::string_view(buf.get(), size)));
                 }
-                catch (std::runtime_error e)
+                catch (std::runtime_error &e)
                 {
                     candidates[category].erase(file);
                     continue;
@@ -572,7 +572,7 @@ namespace vwa
                     {
                     case 'F':
                     {
-                        ret.exports.push_back(Symbol{{std::string{name}, ret.name}, {Symbol::Function{}}});
+                        ret.exports.push_back(Symbol{{std::string{name}, ret.name}, Symbol::Function{}});
                         auto &f = std::get<Symbol::Function>(ret.exports.back().data);
                         f.returnType = readType();
                         auto pl = readSize();
@@ -617,7 +617,7 @@ namespace vwa
                     {
                     case 'F':
                     {
-                        ret.requiredSymbols.push_back(Symbol{std::move(name), {Symbol::Function{}}});
+                        ret.requiredSymbols.push_back(Symbol{std::move(name), Symbol::Function{}});
                         auto &f = std::get<Symbol::Function>(std::get<Symbol>(ret.requiredSymbols.back()).data);
                         f.returnType = readType();
                         auto pl = readSize();

@@ -10,7 +10,8 @@ include(extern/Catch2/extras/Catch.cmake)
 add_compile_options(-fPIC)#Fmt doesn't like shared libraries
 add_subdirectory(extern/fmt)#TODO: write a wrapper around this to support redirecting to files or find out how to do that using normal library functions
 
-add_compile_options(-Wall -Wextra -Wno-unknown-pragmas) #-fconcepts-diagnostics-depth=6)
+# add_compile_options(-Wall -Wextra -Wno-unknown-pragmas) #-fconcepts-diagnostics-depth=6)
+add_compile_options(-w)
 add_subdirectory(common)
 link_libraries(common fmt::fmt)
 add_subdirectory(preprocessor)#This is seperated out because both the linker and the compiler require it

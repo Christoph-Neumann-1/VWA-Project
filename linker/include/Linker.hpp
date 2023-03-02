@@ -61,26 +61,29 @@ namespace vwa
 {
 
     class Logger;
+    // Moved outside due to gcc bug
+    struct VarType
+    {
+        Identifier name{};
+        uint32_t pointerDepth{};
+        bool operator==(const VarType &other) const
+        {
+            return name == other.name && pointerDepth == other.pointerDepth;
+        }
+    };
     class Linker
     {
 
     public:
+        using VarType = ::vwa::VarType;
+
         using FFIFunc = void (*)(VM *vm);
-        struct VarType
-        {
-            Identifier name{};
-            uint32_t pointerDepth{};
-            bool operator==(const VarType &other) const
-            {
-                return name == other.name && pointerDepth == other.pointerDepth;
-            }
-        };
         struct Symbol
         {
             Identifier name;
             struct Field
             {
-                std::string name;
+                std::string name{};
                 VarType type;
                 // bool isMutable{1}; // Ignored as of right now
                 bool operator==(const Field &other) const
@@ -306,7 +309,7 @@ namespace vwa
                 throw SymbolNotFound(symbol.name.name);
         }
 
-        std::string serialize(const Module &,bool);
+        std::string serialize(const Module &, bool);
         static Module deserialize(std::string_view in);
         std::string generateInterface();
         // TODO: try to transfer some of these ideas to the vm

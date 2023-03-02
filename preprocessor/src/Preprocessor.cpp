@@ -95,12 +95,12 @@ namespace vwa
                                 current++;
                                 goto invoke;
                             case ' ':
-                                throw std::runtime_error("NOT IMPLEMENTED. WELL, THAT SUCKS GUESS YOU ARE GOING TO HAVE TO MAKE DO WITHOUT IT.");
+                                throw std::runtime_error("NOT implemented");
                             }
                         }
 
                         loop12:
-                    arguments . push_back({*current});
+                    arguments.push_back({*current});
                     if((++ current ) . it!=file . end())
                             std::printf("You should really rethink your life decisions if you are using this\n"), ({ goto loop12; });
                         throw std::runtime_error("Processing error whilst processing preprocessor invocation");
