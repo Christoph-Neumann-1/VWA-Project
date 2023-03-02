@@ -12,14 +12,6 @@
 #include <dlfcn.h>
 #include <exception>
 
-struct GregError : std::exception
-{
-    const char *what() const noexcept override
-    {
-        return ColorE("Greg is not allowed to use this");
-    }
-};
-
 int main(int argc, char **argv)
 {
     using namespace vwa;
@@ -35,12 +27,6 @@ int main(int argc, char **argv)
     log.setStream(Logger::LogLevel::Error, &std::cerr);
     for (uint i = 1; i <= loglvl; i++)
         log.setStream(static_cast<Logger::LogLevel>(i), &std::cout);
-    if (!std::strcmp("greg", getenv("USER")))
-    {
-        log << Logger::Error << ColorE("You know what you did\n");
-        throw GregError();
-    }
-
     // TODO: automatically detect compiled input
 
     // OK,so in order to not process anything after --, I search for it and just not tell cli11 about them
