@@ -1,5 +1,6 @@
 #define MODULE_IMPL
 #include "core.gen.hpp"
+#include <math.h>
 using namespace vwa;
 namespace core
 {
@@ -50,5 +51,10 @@ namespace core
     void *calloc(vm_int a, vm_int b)
     {
         return ::calloc(a, b);
+    }
+    char* itostr(vm_int i){
+        auto ret = static_cast<char *>(malloc((int)(i==0?2:(ceil(log10(i)) + 1) * sizeof(char))));
+        sprintf(ret, "%d", i);
+        return ret;
     }
 }

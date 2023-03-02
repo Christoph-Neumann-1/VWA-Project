@@ -22,7 +22,7 @@
             "program": "${command:cmake.launchTargetPath}",
             "args": [
                 // "-r",
-                "examples/structs.vwa",
+                "examples/fizzbuzz.vwa",
                 // "--",
                 // "test",
                 // "-i",

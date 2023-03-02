@@ -12,3 +12,4 @@ realloc(void*,int)->void*
 memcpy(void*,void*,int)->void*
 memmove(void*,void*,int)->void*
 calloc(int,int)->void*
+itostr(int)->char*

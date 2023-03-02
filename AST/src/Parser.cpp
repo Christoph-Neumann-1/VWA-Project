@@ -433,10 +433,10 @@ namespace vwa
     [[nodiscard]] static Node parseMulDiv(const std::vector<Token> &tokens, size_t &pos)
     {
         auto rhs = parsePower(tokens, pos);
-        while (tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::slash)
+        while (tokens[pos].type == Token::Type::asterix || tokens[pos].type == Token::Type::slash||tokens[pos].type==Token::Type::modulo)
         {
             auto line = tokens[pos].line;
-            rhs = {tokens[pos].type == Token::Type::asterix ? Node::Type::Multiply : Node::Type::Divide, {}, {std::move(rhs), parsePower(tokens, ++pos)}, line};
+            rhs = {tokens[pos].type == Token::Type::asterix ? Node::Type::Multiply : tokens[pos].type==Token::Type::slash?Node::Type::Divide:Node::Type::Modulo, {}, {std::move(rhs), parsePower(tokens, ++pos)}, line};
         }
         return rhs;
     }

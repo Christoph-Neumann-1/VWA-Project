@@ -1,0 +1,13 @@
+import core
+func main(argc:int, argv:char**)->int
+{
+    for(let i:int=0;i<=10;i=i+1;)
+        core::print_c_str(core::itostr(i));
+
+    let i:int=0;
+    while(i<=10)
+    {
+        i=i+1;
+        core::print_c_str(core::itostr(i));
+    }
+}

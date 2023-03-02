@@ -288,7 +288,7 @@ namespace vwa
                 auto &current = it.pos;
                 auto begin = current + 1;
                 // Multi line strings may be supported in the future
-                while (*(it + 1) != '"' && *it != '\\')
+                while (!(*(it + 1) == '"' && *it != '\\'))
                     ++it;
                 std::string str;
                 str.reserve(current - begin + 1);

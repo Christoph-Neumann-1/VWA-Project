@@ -593,6 +593,7 @@ namespace vwa
                     {
                         rt = it2->second.type;
                         pushToBc<intptr_t>(bc, it2->second.offset);
+                        break;
                     }
                 }
             }
