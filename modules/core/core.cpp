@@ -3,35 +3,27 @@
 using namespace vwa;
 namespace core
 {
-    String make_str(vm_int *str)
-    {
-        throw std::runtime_error("not implemented");
+    String make_str(vm_char* str)
+    { 
+        auto l = strlen(str);
+        auto p = static_cast<char*>(malloc(l));
+        memcpy(p, str, l);
+        return {l, p};
     }
 
     void print(String str)
     {
-        throw std::runtime_error("not implemented");
+        write(0, str.content, str.length);
     }
 
-    void print_raw(vm_int *str)
+    void print_c_str(char*str)
     {
-        for (; *str; str++)
-            putchar(*str);
+        write(0, str, strlen(str));
     }
 
-    void print_c_str(vm_char *c)
+    vm_char getChar()
     {
-        ::printf("%s", c);
-    }
-
-    String getLine()
-    {
-        throw std::runtime_error("not implemented");
-    }
-
-    vm_int *getLine_raw()
-    {
-        throw std::runtime_error("not implemented");
+        return ::getc(stdin);
     }
 
     void *malloc(vm_int s)

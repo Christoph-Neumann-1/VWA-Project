@@ -23,7 +23,7 @@ namespace vwa
         ids.insert({{"int"}, I64});
         ids.insert({{"float"}, F64});
         ids.insert({{"char"}, U8});
-        ids.insert({{"string"}, I64 | (1ul << 32)}); // FIXME: this should be replaced by I64 ptr when found, not later
+        ids.insert({{"string"}, U8 | (1ul << 32)}); // FIXME: this should be replaced by I64 ptr when found, not later
         ids.insert({{"function"}, FPtr});            // TODO: better way to encode this
 
         const auto processSym = [&](Symbol *sym)

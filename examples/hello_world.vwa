@@ -1,0 +1,8 @@
+import core
+
+func main(argc:int, argv:char**) -> int
+{
+    core::print_c_str("Hello, world!");
+    if(argc)
+    core::print_c_str(*argv);
+}

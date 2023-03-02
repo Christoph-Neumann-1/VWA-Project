@@ -71,7 +71,8 @@ int main(int argc, char **argv)
         log << Logger::Info << "Executing main function\n";
         vm.setupStack();
         vm.stack.push<int64_t>(argc - argc2);
-        for (int i = argc2; i < argc - argc2; i++)
+        vm.stack.push<uint64_t>(reinterpret_cast<uint64_t>(vm.stack.top)+8);
+        for (int i = argc2+1; i < argc; i++)
             vm.stack.push(argv[i]);
         log << Logger::Info << ColorI("BEGIN PROGRAM OUTPUT\n\n");
         auto begin = std::chrono::high_resolution_clock::now();

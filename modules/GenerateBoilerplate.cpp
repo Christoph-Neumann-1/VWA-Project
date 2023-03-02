@@ -259,7 +259,7 @@ namespace vwa::boilerplate
             << "{\n"
             << "using vm_int=int64_t;\n"
             << "using vm_float = double;\n"
-            // << "using vm_str = int *;\n"
+            // << "using vm_str = char*;\n"
             << "using vm_char = char;\n" // TODO: the rest of the types
             << "}\n"
             << "#define VM_STRUCT struct __attribute__((packed))\n";

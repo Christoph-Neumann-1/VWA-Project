@@ -22,7 +22,9 @@
             "program": "${command:cmake.launchTargetPath}",
             "args": [
                 "-r",
-                "testfile.bc",
+                "examples/hello_world.vwa.bc",
+                "--",
+                "test",
                 // "-i",
                 // "testfile",
                 // "testfile2",

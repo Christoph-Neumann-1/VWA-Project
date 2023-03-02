@@ -213,7 +213,7 @@ namespace vwa
                 log << Logger::Error << "Main function must return int\n";
                 throw std::runtime_error("Main function must return int");
             }
-            if (cachedF.params.size() != 2 || cachedF.params[0] != Cache::I64 || cachedF.params[1] != (Cache::I64 | (2ul << 32)))
+            if (cachedF.params.size() != 2 || cachedF.params[0] != Cache::I64 || cachedF.params[1] != (Cache::U8 | (2ul << 32)))
             {
                 log << Logger::Error << "Main function must have 2 parameters int and string*\n";
                 throw std::runtime_error("Main function must have 2 parameters int and string*");
@@ -1100,12 +1100,13 @@ namespace vwa
         case Node::Type::LiteralS:
         {
             auto &str = std::get<std::string>(node.value);
-            pushToConst<int64_t>(constPool, 0);
+            // pushToConst<int64_t>(constPool, 0);??? What was this trying to achieve
+            
             for (auto i = str.size() - 1; i + 1 >= 1; --i)
-                pushToConst<int64_t>(constPool, str[i]);
+                pushToConst<char>(constPool, str[i]);
             bc.push_back({bc::AbsOfConst});
             pushToBc<uint64_t>(bc, -bc.size() - constPool.size() + 1);
-            return Cache::constructType(Cache::SymbolType::Struct, Cache::I64, 1); // Should this be a char instead?
+            return Cache::constructType(Cache::SymbolType::Struct, Cache::U8, 1); // Should this be a char instead?
         }
         }
 

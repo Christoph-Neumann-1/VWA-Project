@@ -1,13 +1,11 @@
 module core
 
 export:
-String{length:int, content:int*}
-make_str(int*)->String
+String{length:int, content:char*}
+make_str(char*)->String
 print(String)
-print_raw(int*)
 print_c_str(char*)
-getLine()->String
-getLine_raw()->int*
+getChar()->char
 malloc(int)->void*
 free(void*)
 realloc(void*,int)->void*
